@@ -42,7 +42,21 @@ except ImportError:  # config.py absent : on retombe sur les variables d'environ
 
 
 def _cfg(nom, defaut=""):
-    return getattr(config, nom, None) or os.getenv(nom, defaut)
+    # En local, les valeurs viennent de config.py ou des variables d'environnement.
+    valeur = getattr(config, nom, None) or os.getenv(nom)
+    if valeur:
+        return valeur
+    # Sur Streamlit Community Cloud, les secrets se configurent dans
+    # Manage app > Settings > Secrets, pas dans config.example.py.
+    try:
+        import streamlit as st
+        valeur = st.secrets.get(nom)
+        if valeur:
+            return str(valeur)
+    except Exception:
+        # Streamlit peut être absent ou ses secrets non configurés en local.
+        pass
+    return defaut
 
 
 GOOGLE_MAPS_API_KEY = _cfg("GOOGLE_MAPS_API_KEY")
