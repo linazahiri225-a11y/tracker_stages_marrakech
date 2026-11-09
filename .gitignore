@@ -1,0 +1,23 @@
+# Secrets and OAuth credentials: never publish these files.
+config.py
+credentials.json
+token.json
+.env
+.streamlit/secrets.toml
+
+# Personal documents and local data.
+mon_cv.pdf
+ma_lettre_motivation.pdf
+profil.json
+entreprises_marrakech.csv
+suivi*.csv
+offres_importees.csv
+
+# Python / local development artifacts.
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.vscode/
+.idea/
+.DS_Store

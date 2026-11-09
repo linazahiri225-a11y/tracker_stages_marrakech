@@ -1,0 +1,10 @@
+streamlit
+pandas
+requests
+beautifulsoup4
+folium
+streamlit-folium
+pypdf
+google-api-python-client
+google-auth-oauthlib
+google-auth-httplib2
