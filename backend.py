@@ -1,14 +1,4 @@
-"""
-backend.py - KechTech Stages
-Collecte des entreprises / offres à Marrakech, génération de lettres et
-scoring de compatibilité via OmniRoute (passerelle IA compatible OpenAI),
-envoi d'e-mails de candidature et suivi.
-
-Variables d'environnement (optionnelles) :
-    OMNIROUTE_BASE_URL  ex: http://localhost:20128/v1
-    OMNIROUTE_API_KEY   clé générée dans le dashboard OmniRoute
-    OMNIROUTE_MODEL     nom du modèle ou du "combo" configuré dans OmniRoute
-"""
+"""backend.py - tracker_stages_marrakech"""
 import base64
 import json
 import os
@@ -37,24 +27,18 @@ CSV_SUIVI = "suivi_candidatures.csv"
 
 try:
     import config
-except ImportError:  # config.py absent : on retombe sur les variables d'environnement
+except ImportError:  
     config = None
-
-
 def _cfg(nom, defaut=""):
-    # En local, les valeurs viennent de config.py ou des variables d'environnement.
     valeur = getattr(config, nom, None) or os.getenv(nom)
     if valeur:
         return valeur
-    # Sur Streamlit Community Cloud, les secrets se configurent dans
-    # Manage app > Settings > Secrets, pas dans config.example.py.
     try:
         import streamlit as st
         valeur = st.secrets.get(nom)
         if valeur:
             return str(valeur)
     except Exception:
-        # Streamlit peut être absent ou ses secrets non configurés en local.
         pass
     return defaut
 
@@ -75,7 +59,7 @@ PROFIL = {
         "machine learning", "etl", "postgresql", "streamlit", "fastapi",
     ],
 }
-
+#la liste des recherches envoyées à Google Places
 DEFAULT_QUERIES = [
     "entreprise informatique Marrakech",
     "agence web Marrakech",
@@ -159,12 +143,10 @@ def _entetes_omniroute():
 
 
 def omniroute_disponible():
-    """La clé est facultative : OmniRoute peut tourner sans clé en local (REQUIRE_API_KEY désactivé)."""
     return bool(OMNIROUTE["base_url"])
 
 
 def tester_omniroute(timeout=4):
-    """Retourne (ok, message) en interrogeant GET /models."""
     try:
         r = requests.get(f"{OMNIROUTE['base_url'].rstrip('/')}/models", headers=_entetes_omniroute(), timeout=timeout)
     except Exception as e:
@@ -177,7 +159,6 @@ def tester_omniroute(timeout=4):
 
 
 def appeler_omniroute(messages, temperature=0.4, max_tokens=700, timeout=40):
-    """Appelle /chat/completions d'OmniRoute. Retourne le texte ou None."""
     if not omniroute_disponible():
         return None
     url = f"{OMNIROUTE['base_url'].rstrip('/')}/chat/completions"
@@ -227,7 +208,6 @@ def _exiger_texte_omniroute(messages, **kwargs):
 
 
 def adapter_candidature_omniroots(entreprise_nom, poste_titre, competences="", description=""):
-    """Génère le corps du mail via OmniRoute, sans texte de remplacement."""
     messages = [
         {"role": "system", "content": "Tu rédiges des e-mails de candidature de stage en français, "
                                       "professionnels, sincères, 120 à 160 mots, sans inventer d'expérience."},
@@ -357,7 +337,6 @@ def _coord():
 
 
 def collecter_jawb(ville="Marrakech"):
-    """Lit le flux RSS public Jawb prévu par le site pour suivre ses annonces."""
     url = "https://jawb.ma/rss.xml"
     try:
         res = requests.get(url, params={"ville": ville},
@@ -389,8 +368,6 @@ def collecter_jawb(ville="Marrakech"):
             description = contenu.text.strip()
         description = BeautifulSoup(description, "html.parser").get_text(" ", strip=True)
         texte = f"{titre} {description}".casefold()
-        # Le flux peut contenir des emplois classiques : ne conserver que les
-        # stages en informatique/data, sujet de cette application.
         mots_stage = ("stage", "stagiaire", "intern", "pfe")
         mots_it = ("informatique", "data", "python", "dévelop", "develop", "logiciel",
                    "digital", "ia", "intelligence artificielle", "sql", "power bi", "tech")
@@ -474,9 +451,6 @@ def _email_estime(nom, site):
 
 
 def executer_collecte_complete(api_key, queries=DEFAULT_QUERIES, progress=None, budget_s=75):
-    """Collecte en parallèle (Google Places pour les entreprises, LinkedIn et Jawb pour les annonces).
-    budget_s : durée max pour la partie e-mails/web ; au-delà, les e-mails restants sont estimés.
-    progress(fraction, texte) : callback facultatif pour afficher l'avancement."""
     maj = progress or (lambda p, t: None)
     DERNIERE_ERREUR.clear()
     maj(0.05, "Recherche des entreprises sur Google Maps...")
@@ -576,10 +550,10 @@ def mettre_a_jour_statut(place_id, nouveau_statut, canal, notes):
 
 
 # ------------------------------------------------------------------
-# E-MAIL : API Gmail (HTTPS, port 443) au lieu de SMTP
+# E-MAIL : API Gmail (HTTPS, port 443) 
 # ------------------------------------------------------------------
 GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
-GMAIL_CREDENTIALS = _cfg("GMAIL_CREDENTIALS_FILE", "credentials.json")  # téléchargé depuis Google Cloud (ID client OAuth « Application de bureau »)
+GMAIL_CREDENTIALS = _cfg("GMAIL_CREDENTIALS_FILE", "credentials.json") 
 GMAIL_TOKEN = _cfg("GMAIL_TOKEN_FILE", "token.json")                    # créé automatiquement après la première autorisation
 MSG_LIBS_GOOGLE = (
     "Bibliothèques Google absentes de l'environnement Python qui exécute l'application. "
@@ -625,14 +599,13 @@ def _gmail_creds():
         except RefreshError:  # autorisation expirée (mode « Test » : 7 jours) ou révoquée
             os.remove(GMAIL_TOKEN)
             return None
-        _sauver_token(creds)  # une panne réseau lève une autre exception : le jeton est conservé
+        _sauver_token(creds)  
         return creds
     os.remove(GMAIL_TOKEN)
     return None
 
 
 def autoriser_gmail():
-    """Ouvre la page d'autorisation Google dans le navigateur de CE PC, puis enregistre token.json."""
     from google_auth_oauthlib.flow import InstalledAppFlow
     flow = InstalledAppFlow.from_client_secrets_file(GMAIL_CREDENTIALS, GMAIL_SCOPES)
     creds = flow.run_local_server(port=0, prompt="consent", timeout_seconds=240,
@@ -709,9 +682,9 @@ def envoyer_email_candidature(destinataire, sujet, corps, expediteur, fichier_cv
 
 
 def construire_eml(destinataire, sujet, corps, expediteur, fichiers=()):
-    """Message complet (avec pièces jointes) au format .eml, à ouvrir dans Outlook / Thunderbird."""
+    """Message complet (avec pièces jointes) au format .eml."""
     msg, _ = _message_mime(destinataire, sujet, corps, expediteur, fichiers)
-    msg["X-Unsent"] = "1"  # Outlook l'ouvre comme brouillon modifiable
+    msg["X-Unsent"] = "1" 
     return msg.as_bytes()
 
 
@@ -771,7 +744,6 @@ def _correspond(a, b):
 
 
 def extraire_competences(cv_text):
-    """Compétences détectées dans le CV (liste connue ; OmniRoute en complément si dispo)."""
     trouvees = [c for c in COMPETENCES_CONNUES if re.search(rf"(?<!\w){re.escape(c)}(?!\w)", cv_text, re.I)]
     rep = appeler_omniroute([
         {"role": "system", "content": "Réponds uniquement par une liste séparée par des virgules."},
@@ -796,7 +768,7 @@ def _json_depuis_texte(txt):
 
 
 def analyser_cv(cv_text, skills, titre, competences_cible, description=""):
-    """Calcule le score de compétences et exige une synthèse IA valide, sans texte de remplacement."""
+    """Calcule le score de compétences et exige une synthèse IA valide."""
     demandees = [c.strip() for c in str(competences_cible).split(",") if c.strip()]
     communes, manquantes = [], []
     for c in demandees:

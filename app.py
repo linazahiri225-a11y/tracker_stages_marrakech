@@ -1,9 +1,4 @@
-"""Interface Streamlit de MarrakechStage.
-
-Ce module construit les écrans et gère les interactions utilisateur.
-La logique métier (collecte, IA, Gmail et suivi) est dans backend.py.
-Voir README_STRUCTURE.md pour une carte de l'application et du code.
-"""
+"""Interface Streamlit tracker_stages_marrakech"""
 import html
 import io
 import os
@@ -60,11 +55,9 @@ COLS_OFFRE = ["place_id", "nom", "titre_offre", "source", "type_stage", "date_pu
 
 
 def charger_offres():
-    """Lit le CSV collecté s'il est exploitable (colonnes de base présentes), sinon données de démonstration.
+    """Lit le CSV collecté s'il est exploitable (colonnes de base présentes).
     Les colonnes manquantes sont complétées pour ne jamais planter sur un ancien fichier."""
     chemins = [backend.CSV_ENTREPRISES] if os.path.exists(backend.CSV_ENTREPRISES) else []
-    # Charge les résultats de collecte persistés; les colonnes manquantes
-    # sont ajoutées afin que les anciens fichiers restent lisibles.
     if chemins:
         try:
             df = pd.concat([pd.read_csv(p).fillna("") for p in chemins], ignore_index=True)
@@ -101,8 +94,6 @@ def charger_entreprises(df_offres):
 profil = st.session_state.setdefault("profil", backend.charger_profil())
 st.session_state.setdefault("tab", T_OFFRES)
 DONNEES = charger_offres()
-# Google Places fournit des entreprises, pas des annonces de stage. Ne les compte
-# donc pas comme des offres : elles restent disponibles dans l'onglet Carte.
 OFFRES = DONNEES[DONNEES["source"].astype(str).str.casefold() != "google places"].copy()
 ENTS = charger_entreprises(DONNEES)
 OFFRE_PAR_ID = {r["place_id"]: r.to_dict() for _, r in OFFRES.iterrows()}
@@ -379,7 +370,6 @@ if DONNEES.empty and tab in (T_OFFRES, T_CARTE, T_ANALYSE, T_EMAIL):
 # 1. OFFRES
 # ==========================================
 if tab == T_OFFRES:
-    # Écran 1 : recherche, filtres par source et affichage des annonces.
     hero("offres", "✨ Agrégateur Exclusif Marrakech • Data & IA", "Trouvez votre Stage IT & IA / Data Analyst à Marrakech",
          "Les annonces réelles collectées depuis les sources configurées. Les entreprises trouvées sur Google Maps "
          "sont affichées dans l'onglet Carte, séparément des offres. Générez vos candidatures avec l'IA.")
@@ -441,7 +431,6 @@ if tab == T_OFFRES:
 # 2. CARTE & ENTREPRISES
 # ==========================================
 elif tab == T_CARTE:
-    # Écran 2 : entreprises de Google Maps représentées sur une carte Folium.
     hero("carte", "📍 Collecteur & Cartographie Google Maps • Marrakech", "Entreprises IT & Laboratoires IA à Marrakech",
          "Localisez toutes les structures tech basées à Marrakech (Guéliz, Hivernage, Sidi Ghanem). Obtenez l'email direct "
          "du recruteur et postulez instantanément en candidature spontanée avec l'IA.")
@@ -516,7 +505,6 @@ elif tab == T_CARTE:
 # 3. CV & LETTRE
 # ==========================================
 elif tab == T_CV:
-    # Écran 3 : profil candidat et documents CV/lettre de motivation.
     hero("cv", "👤 Candidat Data & IA • Marrakech", "Mon Profil, CV & Lettre de Motivation",
          "Personnalisez vos compétences en IA et Data Analytics. L'IA adaptera automatiquement votre CV et lettre pour "
          "chaque entreprise ou offre à Marrakech.", action=("🔄 Charger profil type Marrakech", charger_profil_type, ()))
@@ -593,7 +581,6 @@ elif tab == T_CV:
 # 4. ANALYSEUR IA
 # ==========================================
 elif tab == T_ANALYSE:
-    # Écran 4 : analyse du CV et adéquation avec une offre via OmniRoute.
     hero("analyse", "✨ Analyseur Prédictif IA • OmniRoute", "Matching IA : CV vs Offre & Entreprise à Marrakech",
          "L'intelligence artificielle analyse votre CV et vos compétences au regard des exigences du recruteur, détecte les "
          "compétences clés manquantes et formule des recommandations adaptées au marché tech de Marrakech.")
@@ -658,7 +645,6 @@ elif tab == T_ANALYSE:
 # 5. EMAIL & CANDIDATURE
 # ==========================================
 elif tab == T_EMAIL:
-    # Écran 5 : génération du message, pièces jointes et envoi Gmail.
     hero("email", "✉️ Générateur d'Emails de Candidature • Marrakech IT", "Email de Candidature Personnalisé par l'IA",
          "Générez un email ultra-ciblé mentionnant la référence de l'offre (LinkedIn, Indeed, Stagiaire.ma) ou une candidature "
          "spontanée mettant en valeur vos compétences (Python, SQL, Power BI) pour les entreprises de Marrakech.")
@@ -732,7 +718,6 @@ elif tab == T_EMAIL:
 # 6. SUIVI
 # ==========================================
 elif tab == T_SUIVI:
-    # Écran 6 : liste des candidatures et mise à jour de leur statut.
     hero("suivi", "📊 Analytics & Suivi des Démarches • Stages Marrakech", "Tableau de Bord & Métriques des Candidatures",
          "Visualisez les statistiques en temps réel de votre campagne de recherche de stage à Marrakech : taux de réponse, "
          "entonnoir de conversion et répartition par type de candidature.",
