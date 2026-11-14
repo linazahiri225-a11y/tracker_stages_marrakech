@@ -408,59 +408,61 @@ def _coord():
 
 def collecter_jawb(ville="Marrakech"):
     url = "https://jawb.ma/rss.xml"
-    try:
-        res = requests.get(url, params={"ville": ville},
-                           headers={"User-Agent": "MarrakechStage/1.0 (lecteur RSS)"}, timeout=15)
-        if res.status_code != 200:
-            DERNIERE_ERREUR["jawb"] = f"Flux RSS Jawb HTTP {res.status_code}"
-            return pd.DataFrame()
-        root = ET.fromstring(res.content)
-    except Exception as exc:
-        DERNIERE_ERREUR["jawb"] = f"Erreur de lecture du flux RSS Jawb : {exc}"
-        return pd.DataFrame()
-
     offres, vus = [], set()
+    erreurs = []
     modele_vide = {"domaine": "Informatique", "remuneration": "Non précisée", "duree": "Non précisée",
                    "description": "", "competences": "", "missions": "", "profil": ""}
     ns = {"content": "http://purl.org/rss/1.0/modules/content/"}
-    for item in root.findall(".//item"):
-        def champ(nom):
-            el = item.find(nom)
-            return "" if el is None or el.text is None else el.text.strip()
+    for metier in ("data", "intelligence artificielle", "informatique"):
+        try:
+            res = requests.get(url, params={"ville": ville, "metier": metier},
+                               headers={"User-Agent": "MarrakechStage/1.0 (lecteur RSS)"}, timeout=15)
+            if res.status_code != 200:
+                erreurs.append(f"HTTP {res.status_code} pour {metier}")
+                continue
+            root = ET.fromstring(res.content)
+        except Exception as exc:
+            erreurs.append(f"{metier}: {str(exc)[:90]}")
+            continue
 
-        titre, lien = champ("title"), champ("link")
-        if not titre or not lien or lien in vus:
-            continue
-        vus.add(lien)
-        description = champ("description")
-        contenu = item.find("content:encoded", ns)
-        if contenu is not None and contenu.text:
-            description = contenu.text.strip()
-        description = BeautifulSoup(description, "html.parser").get_text(" ", strip=True)
-        texte = f"{titre} {description}".casefold()
-        mots_stage = ("stage", "stagiaire", "intern", "pfe")
-        mots_it = ("informatique", "data", "python", "dévelop", "develop", "logiciel",
-                   "digital", "ia", "intelligence artificielle", "sql", "power bi", "tech")
-        if not any(m in texte for m in mots_stage) or not any(m in texte for m in mots_it):
-            continue
-        entreprise = champ("company") or champ("author") or "Entreprise (voir l'annonce)"
-        date_pub = champ("pubDate")
-        offres.append(_ligne(
-            f"jawb_{abs(hash(lien))}", entreprise, titre, ville, "", "", False, lien,
-            "", 0, 31.6295, -7.9811, "Offre Jawb", "Jawb", ville, modele_vide,
-            date_pub or "Récemment"))
-        offres[-1]["description"] = description
-        contract = champ("category")
-        if contract:
-            offres[-1]["type_stage"] = contract
+        for item in root.findall(".//item"):
+            def champ(nom):
+                el = item.find(nom)
+                return "" if el is None or el.text is None else el.text.strip()
+
+            titre, lien = champ("title"), champ("link")
+            if not titre or not lien or lien in vus:
+                continue
+            vus.add(lien)
+            description = champ("description")
+            contenu = item.find("content:encoded", ns)
+            if contenu is not None and contenu.text:
+                description = contenu.text.strip()
+            description = BeautifulSoup(description, "html.parser").get_text(" ", strip=True)
+            if not offre_pertinente(titre, description):
+                continue
+            entreprise = champ("company") or champ("author") or "Entreprise (voir l'annonce)"
+            date_pub = champ("pubDate")
+            offres.append(_ligne(
+                f"jawb_{abs(hash(lien))}", entreprise, titre, ville, "", "", False, lien,
+                "", 0, 31.6295, -7.9811, "Data / IA", "Jawb", ville, modele_vide,
+                date_pub or "Récemment"))
+            offres[-1]["description"] = description
+            contract = champ("category")
+            if contract:
+                offres[-1]["type_stage"] = contract
+    if not offres and erreurs:
+        DERNIERE_ERREUR["jawb"] = "Flux Jawb indisponible : " + " ; ".join(erreurs)
     return pd.DataFrame(offres)
 
 
 MOTS_STAGE_OFFRE = ("stage", "stagiaire", "intern", "internship", "pfe", "apprentissage", "alternance")
 MOTS_DOMAINE_OFFRE = (
     "data", "donnees", "intelligence artificielle", "artificial intelligence", "machine learning",
-    "deep learning", "business intelligence", "informatique", "computer science", "developpeur",
-    "developer", "software", "python", "sql", "power bi", "analyste", "analyst", "big data",
+    "deep learning", "business intelligence", "power bi", "analyse de donnees", "analyste de donnees",
+    "analyste des donnees", "data analyst",
+    "data scientist", "data engineer", "data science", "big data", "data mining", "analytics",
+    "statistiques", "python data",
 )
 
 
@@ -470,10 +472,10 @@ def _texte_normalise(texte):
 
 
 def offre_pertinente(titre, description="", competences=""):
-    """Vrai uniquement pour une offre de stage liée aux métiers data/IA/IT."""
+    """Vrai uniquement pour une offre de stage explicitement orientée data ou IA."""
     titre_normalise = _texte_normalise(titre)
     texte = _texte_normalise(f"{titre} {description} {competences}")
-    domaine_ia = bool(re.search(r"(?<!\w)ia(?!\w)", texte))
+    domaine_ia = bool(re.search(r"(?<!\w)(?:ia|ai)(?!\w)", texte))
     return (any(mot in titre_normalise for mot in MOTS_STAGE_OFFRE)
             and (domaine_ia or any(mot in texte for mot in MOTS_DOMAINE_OFFRE)))
 
@@ -524,6 +526,67 @@ def collecter_linkedin(keywords=("stage data", "stage intelligence artificielle"
     return pd.DataFrame(offres)
 
 
+def collecter_stagiaires_ma(ville="Marrakech"):
+    """Lit les annonces publiques de stages de Stagiaires.ma, sans compte ni clé API."""
+    ville_slug = _texte_normalise(ville).replace(" ", "-")
+    url = f"https://www.stagiaires.ma/stage-emploi-ville/{ville_slug}"
+    headers = {"User-Agent": "MarrakechStage/1.0 (agrégateur d'offres publiques)"}
+    try:
+        res = requests.get(url, headers=headers, timeout=18)
+        if res.status_code != 200:
+            DERNIERE_ERREUR["stagiaires.ma"] = f"Stagiaires.ma HTTP {res.status_code}"
+            return pd.DataFrame()
+        soup = BeautifulSoup(res.text, "html.parser")
+    except Exception as exc:
+        DERNIERE_ERREUR["stagiaires.ma"] = f"Erreur Stagiaires.ma : {str(exc)[:120]}"
+        return pd.DataFrame()
+
+    offres, vus = [], set()
+    modele = {"domaine": "Data / IA", "remuneration": "Non précisée", "duree": "Non précisée",
+              "description": "", "competences": "", "missions": "", "profil": ""}
+    for lien_offre in soup.find_all("a", href=re.compile(r"/stage-emploi-maroc/")):
+        href = urllib.parse.urljoin(url, lien_offre.get("href", "")).split("?")[0]
+        if not href or href in vus:
+            continue
+        vus.add(href)
+
+        bloc = lien_offre
+        for _ in range(5):
+            parent = getattr(bloc, "parent", None)
+            if not parent or getattr(parent, "name", None) in ("body", "html"):
+                break
+            bloc = parent
+            if bloc.find(["h2", "h3", "h4"]):
+                break
+        titre_el = lien_offre.find(["h2", "h3", "h4"]) or bloc.find(["h2", "h3", "h4"])
+        image = lien_offre.find("img") or bloc.find("img")
+        titre = (titre_el.get_text(" ", strip=True) if titre_el else "")
+        if not titre and image:
+            titre = image.get("alt", "").strip()
+        if not titre:
+            titre = lien_offre.get_text(" ", strip=True)
+        if not offre_pertinente(titre):
+            continue
+
+        liens_bloc = bloc.find_all("a", href=True)
+        employeur = next((a.get_text(" ", strip=True) for a in liens_bloc
+                          if a is not lien_offre and re.search(r"/entreprise/|/companies/", a["href"], re.I)
+                          and a.get_text(" ", strip=True)), "Entreprise (voir l'annonce)")
+        texte_bloc = bloc.get_text(" ", strip=True)
+        offre = _ligne(
+            f"stagiaires_{abs(hash(href))}", employeur, titre, ville, "", "", False, href,
+            "", 0, 31.6295, -7.9811, "Data / IA", "Stagiaires.ma", ville, modele, "Récemment")
+        offre["description"] = texte_bloc[:1200]
+        offres.append(offre)
+
+    if not offres:
+        DERNIERE_ERREUR.setdefault(
+            "stagiaires.ma",
+            "Aucune annonce data/IA de stage trouvée sur la page publique de Marrakech."
+        )
+    return pd.DataFrame(offres)
+
+
 def nettoyer_donnees(df_brut):
     if df_brut.empty:
         return df_brut
@@ -555,9 +618,13 @@ def _email_estime(nom, site):
 def executer_collecte_complete(api_key, queries=DEFAULT_QUERIES, progress=None, budget_s=75):
     maj = progress or (lambda p, t: None)
     DERNIERE_ERREUR.clear()
-    maj(0.05, "Recherche des entreprises sur Google Maps...")
-    with ThreadPoolExecutor(max_workers=max(1, len(queries))) as ex:
-        resultats = list(ex.map(lambda q: chercher_places_api(q, api_key), queries))
+    if api_key:
+        maj(0.05, "Recherche des entreprises sur Google Maps...")
+        with ThreadPoolExecutor(max_workers=max(1, len(queries))) as ex:
+            resultats = list(ex.map(lambda q: chercher_places_api(q, api_key), queries))
+    else:
+        DERNIERE_ERREUR["google"] = "Clé Google Maps absente : seules les sources d'offres publiques seront collectées."
+        resultats = []
 
     uniques, vus = [], set()
     for i, places in enumerate(resultats):
@@ -569,10 +636,10 @@ def executer_collecte_complete(api_key, queries=DEFAULT_QUERIES, progress=None, 
     maj(0.2, f"{len(uniques)} entreprises trouvées. Recherche des e-mails RH et des offres...")
 
     pool = ThreadPoolExecutor(max_workers=16)
+    # Démarrer les collecteurs d'offres avant les tâches d'e-mails pour éviter qu'elles attendent derrière 70+ sites.
+    f_web = [pool.submit(collecter_jawb), pool.submit(collecter_stagiaires_ma), pool.submit(collecter_linkedin)]
     f_emails = {pool.submit(obtenir_email_normalise, p.get("displayName", {}).get("text", ""),
                             p.get("websiteUri", "")): k for k, (_, _, p) in enumerate(uniques)}
-    # Collecteurs d'annonces : LinkedIn et flux public Jawb.
-    f_web = [pool.submit(collecter_linkedin), pool.submit(collecter_jawb)]
     tous = list(f_emails) + f_web
     fin = time.time() + budget_s
     faits = 0
@@ -605,7 +672,7 @@ def executer_collecte_complete(api_key, queries=DEFAULT_QUERIES, progress=None, 
             if not df.empty:
                 dfs.append(df)
     if not dfs:
-        erreurs = [DERNIERE_ERREUR[k] for k in ("linkedin", "jawb") if DERNIERE_ERREUR.get(k)]
+        erreurs = [DERNIERE_ERREUR[k] for k in ("linkedin", "jawb", "stagiaires.ma") if DERNIERE_ERREUR.get(k)]
         if erreurs:
             DERNIERE_ERREUR["offres"] = " ; ".join(erreurs)
         else:

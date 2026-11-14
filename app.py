@@ -327,8 +327,7 @@ def panneau_collecte():
         st.warning(ancien_bilan)
     if st.button("🔄 Lancer la collecte", type="primary", key="btn_collecte"):
         if not backend.GOOGLE_MAPS_API_KEY:
-            st.error("Aucune clé Google Maps : renseignez GOOGLE_MAPS_API_KEY dans config.py.")
-            return
+            st.info("Google Maps n'est pas configuré : la collecte va quand même chercher les offres publiques de stage.")
         barre = st.progress(0.0, text="Démarrage de la collecte...")
         res = backend.executer_collecte_complete(backend.GOOGLE_MAPS_API_KEY, progress=lambda p, t: barre.progress(p, text=t))
         barre.empty()
@@ -337,11 +336,14 @@ def panneau_collecte():
             st.session_state.bilan_collecte = "Aucun résultat. " + details
             st.rerun()
         else:
-            comptes = res["source"].value_counts().to_dict()
-            bilan = "Collecte terminée. Résultats par source : " + " · ".join(f"{s}: {n}" for s, n in comptes.items())
-            for src in ("LinkedIn", "Jawb"):
+            entreprises_n = int((res["source"].astype(str).str.casefold() == "google places").sum())
+            offres_collectees = res[res["source"].astype(str).str.casefold() != "google places"]
+            comptes = offres_collectees["source"].value_counts().to_dict()
+            bilan = f"Collecte terminée. Entreprises repérées sur Maps : {entreprises_n}. Offres de stage pertinentes : "
+            bilan += " · ".join(f"{s}: {n}" for s, n in comptes.items()) if comptes else "aucune trouvée"
+            for src, cle in (("Stagiaires.ma", "stagiaires.ma"), ("Jawb", "jawb"), ("LinkedIn", "linkedin")):
                 if src not in comptes:
-                    msg = backend.DERNIERE_ERREUR.get(src.casefold().replace("stagiaires.ma", "stagiaires"), "Aucun résultat retourné.")
+                    msg = backend.DERNIERE_ERREUR.get(cle, "Aucun résultat retourné.")
                     bilan += f"\n{src} : 0 — {msg}"
             st.session_state.bilan_collecte = bilan
             st.rerun()
@@ -384,7 +386,7 @@ if tab == T_OFFRES:
         mot = s1.text_input("Recherche", placeholder="🔍  Rechercher par titre, compétence (Python, SQL, Power BI, DAX...), entreprise...  puis appuyez sur Entrée",
                             label_visibility="collapsed")
         sources_disponibles = sorted(OFFRES["source"].dropna().astype(str).unique().tolist())
-        sources_filtre = ["LinkedIn", "Jawb"]
+        sources_filtre = ["Stagiaires.ma", "Jawb", "LinkedIn"]
         choix_sources = ["Toutes"] + list(dict.fromkeys(sources_filtre + sources_disponibles))
         source = s2.radio("Source", choix_sources, horizontal=True, label_visibility="collapsed")
         f1, f2, f3 = st.columns(3)
@@ -392,7 +394,7 @@ if tab == T_OFFRES:
         quartier = f2.selectbox("Quartier à Marrakech", ["Tous les quartiers"] + backend.QUARTIERS)
         type_stage = f3.selectbox("Type de stage", ["Tous les types"] + sorted(t for t in OFFRES["type_stage"].unique() if t))
 
-    st.caption("Google Maps fournit les entreprises. Les annonces sont recherchées automatiquement sur LinkedIn et via le flux RSS public Jawb.")
+    st.caption("Les annonces sont collectées depuis les pages publiques de Stagiaires.ma et les flux RSS de Jawb ; LinkedIn est une source complémentaire. Google Maps sert uniquement à repérer les entreprises.")
 
     df = OFFRES.copy()
     if source != "Toutes":

@@ -6,7 +6,7 @@ Plateforme Streamlit de recherche d'entreprises et d'opportunités de stage à M
 
 - Python 3.10 ou plus récent
 - Une clé Google Maps Platform avec Places API activée pour rechercher les entreprises
-- Une URL OmniRoute compatible OpenAI et accessible depuis le serveur pour les fonctions IA
+- Une clé Gemini (quota gratuit) ou une URL OmniRoute accessible depuis le serveur pour les fonctions IA
 - Un projet Google Cloud/OAuth configuré si l'envoi Gmail est utilisé
 
 ## Installation locale (Windows PowerShell)
@@ -57,9 +57,9 @@ L'appel Gemini est utilisé dès que `GEMINI_API_KEY` est défini ; sinon, l'app
 
 Les PDF, profils et fichiers CSV locaux sont exclus de Git. Ils ne sont donc pas automatiquement présents après déploiement ; ajoutez une gestion de données adaptée si l'application doit retrouver les mêmes fichiers en production.
 
-Les annonces affichées sont filtrées pour garder les stages/PFE en data, IA ou informatique et les offres LinkedIn dont la localisation mentionne Marrakech. Les résultats LinkedIn publics peuvent changer ou être limités par LinkedIn ; vérifiez toujours l'annonce d'origine avant de candidater.
+Les annonces affichées sont filtrées pour ne garder que les stages/PFE orientés data ou IA à Marrakech. Les offres viennent des pages publiques de Stagiaires.ma, des flux RSS Jawb filtrés par métier et, en complément, de LinkedIn. Ces pages ne garantissent pas une API stable ; vérifiez chaque annonce sur son lien d'origine. Google Maps sert uniquement à rechercher des entreprises, pas à créer des offres.
 
-Google Maps sert à rechercher des entreprises ; les lignes Maps ne sont pas des offres d'emploi. Les sources d'annonces actuellement intégrées sont LinkedIn et le flux RSS Jawb. Leur disponibilité dépend de leur accès réseau et du format renvoyé par les sites.
+Les sites de recrutement intégrés sont des sources publiques gratuites, pas des bases « open source » au sens de données sous licence ouverte. Leur disponibilité dépend de l'accès et du format de chaque site.
 
 ## Publier sur GitHub
 
