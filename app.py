@@ -581,7 +581,8 @@ elif tab == T_CV:
 # 4. ANALYSEUR IA
 # ==========================================
 elif tab == T_ANALYSE:
-    hero("analyse", "✨ Analyseur Prédictif IA • OmniRoute", "Matching IA : CV vs Offre & Entreprise à Marrakech",
+    fournisseur_ia = "Gemini" if backend.GEMINI_API_KEY else "OmniRoute"
+    hero("analyse", f"✨ Analyseur Prédictif IA • {fournisseur_ia}", "Matching IA : CV vs Offre & Entreprise à Marrakech",
          "L'intelligence artificielle analyse votre CV et vos compétences au regard des exigences du recruteur, détecte les "
          "compétences clés manquantes et formule des recommandations adaptées au marché tech de Marrakech.")
     st.session_state.setdefault("an_mode", M_OFFRE)
