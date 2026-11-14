@@ -6,7 +6,7 @@ Plateforme Streamlit de recherche d'entreprises et d'opportunités de stage à M
 
 - Python 3.10 ou plus récent
 - Une clé Google Maps Platform avec Places API activée pour rechercher les entreprises
-- OmniRoute lancé et configuré pour les fonctions IA
+- Une URL OmniRoute compatible OpenAI et accessible depuis le serveur pour les fonctions IA
 - Un projet Google Cloud/OAuth configuré si l'envoi Gmail est utilisé
 
 ## Installation locale (Windows PowerShell)
@@ -41,6 +41,21 @@ Streamlit affiche l'adresse locale dans le terminal (généralement `http://loca
 - `README_STRUCTURE.md` : guide des écrans et fonctions du code.
 - `config.example.py` : modèle de configuration sans secret.
 - `requirements.txt` : dépendances Python.
+
+### Déploiement gratuit de l'analyse IA
+
+Pour éviter l'hébergement OmniRoute payant, l'application peut appeler directement Gemini avec une clé API. Créez une clé dans [Google AI Studio](https://aistudio.google.com/apikey), puis, dans Streamlit Community Cloud, ouvrez l'application, choisissez **Manage app > ⋮ > Settings > Secrets**, et ajoutez :
+
+```toml
+GEMINI_API_KEY = "votre-cle-api-gemini"
+GEMINI_MODEL = "gemini-3.1-flash-lite"
+```
+
+Enregistrez les secrets, puis attendez le redémarrage de l'application et relancez l'analyse. Gemini propose un niveau gratuit soumis à des limites d'utilisation susceptibles de changer ; consultez les [tarifs et limites actuels](https://ai.google.dev/gemini-api/docs/pricing). Le niveau gratuit indique que les contenus envoyés peuvent être utilisés pour améliorer les produits Google : évitez d'envoyer des informations confidentielles ou personnelles dans le CV. Les secrets Streamlit et variables d'environnement sont prioritaires sur `config.py` local. Ne mettez aucune clé réelle dans GitHub.
+
+L'appel Gemini est utilisé dès que `GEMINI_API_KEY` est défini ; sinon, l'application essaie la configuration OmniRoute habituelle.
+
+Les PDF, profils et fichiers CSV locaux sont exclus de Git. Ils ne sont donc pas automatiquement présents après déploiement ; ajoutez une gestion de données adaptée si l'application doit retrouver les mêmes fichiers en production.
 
 Google Maps sert à rechercher des entreprises ; les lignes Maps ne sont pas des offres d'emploi. Les sources d'annonces actuellement intégrées sont LinkedIn et le flux RSS Jawb. Leur disponibilité dépend de leur accès réseau et du format renvoyé par les sites.
 

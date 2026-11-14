@@ -30,7 +30,8 @@ try:
 except ImportError:  
     config = None
 def _cfg(nom, defaut=""):
-    valeur = getattr(config, nom, None) or os.getenv(nom)
+    # Le déploiement doit pouvoir remplacer les réglages locaux par ses secrets.
+    valeur = os.getenv(nom)
     if valeur:
         return valeur
     try:
@@ -40,16 +41,22 @@ def _cfg(nom, defaut=""):
             return str(valeur)
     except Exception:
         pass
+    valeur = getattr(config, nom, None)
+    if valeur:
+        return valeur
     return defaut
 
 
 GOOGLE_MAPS_API_KEY = _cfg("GOOGLE_MAPS_API_KEY")
 
 OMNIROUTE = {
-    "base_url": _cfg("OMNIROUTE_BASE_URL", "http://localhost:20128/v1"),
+    # Ne jamais supposer que localhost est OmniRoute sur un serveur hébergé.
+    "base_url": _cfg("OMNIROUTE_BASE_URL"),
     "api_key": _cfg("OMNIROUTE_API_KEY"),
     "model": _cfg("OMNIROUTE_MODEL", "auto"),
 }
+GEMINI_API_KEY = _cfg("GEMINI_API_KEY")
+GEMINI_MODEL = _cfg("GEMINI_MODEL", "gemini-3.1-flash-lite")
 
 PROFIL = {
     "nom": "Lina Zahiri",
@@ -159,7 +166,55 @@ def tester_omniroute(timeout=4):
 
 
 def appeler_omniroute(messages, temperature=0.4, max_tokens=700, timeout=40):
+    # En production, Gemini peut remplacer OmniRoute sans héberger de passerelle.
+    if GEMINI_API_KEY:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+        system_text = "\n\n".join(m["content"] for m in messages if m.get("role") == "system")
+        contents = [
+            {"role": "model" if m.get("role") == "assistant" else "user",
+             "parts": [{"text": str(m.get("content", ""))}]}
+            for m in messages if m.get("role") != "system"
+        ]
+        payload = {
+            "contents": contents,
+            "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens},
+        }
+        if system_text:
+            payload["systemInstruction"] = {"parts": [{"text": system_text}]}
+        if "json strict" in system_text.lower():
+            payload["generationConfig"]["responseMimeType"] = "application/json"
+        try:
+            res = requests.post(
+                url, headers={"x-goog-api-key": GEMINI_API_KEY, "Content-Type": "application/json"},
+                json=payload, timeout=timeout,
+            )
+            if res.status_code != 200:
+                detail = res.text[:250]
+                DERNIERE_ERREUR["omniroute"] = f"Gemini a répondu HTTP {res.status_code} : {detail}"
+                print(DERNIERE_ERREUR["omniroute"])
+                return None
+            data = res.json()
+            parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+            texte = "".join(p.get("text", "") for p in parts if isinstance(p, dict)).strip()
+            if texte:
+                DERNIERE_ERREUR.pop("omniroute", None)
+                return texte
+            DERNIERE_ERREUR["omniroute"] = "Gemini n'a renvoyé aucun texte. Vérifiez le modèle et la réponse de sécurité."
+            return None
+        except requests.exceptions.Timeout:
+            DERNIERE_ERREUR["omniroute"] = "Gemini met trop de temps à répondre. Réessayez dans quelques instants."
+        except requests.exceptions.ConnectionError:
+            DERNIERE_ERREUR["omniroute"] = "Impossible de joindre l'API Gemini depuis le serveur Streamlit."
+        except Exception as e:
+            DERNIERE_ERREUR["omniroute"] = f"Erreur Gemini : {str(e)[:150]}"
+        print(DERNIERE_ERREUR.get("omniroute"))
+        return None
+
     if not omniroute_disponible():
+        DERNIERE_ERREUR["omniroute"] = (
+            "Aucun fournisseur IA n'est configuré. Ajoutez GEMINI_API_KEY dans les secrets "
+            "Streamlit (solution avec quota gratuit) ou configurez OmniRoute."
+        )
         return None
     url = f"{OMNIROUTE['base_url'].rstrip('/')}/chat/completions"
     headers = _entetes_omniroute()
@@ -172,14 +227,24 @@ def appeler_omniroute(messages, temperature=0.4, max_tokens=700, timeout=40):
     try:
         res = requests.post(url, headers=headers, json=payload, timeout=timeout)
         if res.status_code == 200:
-            texte = res.json()["choices"][0]["message"]["content"].strip()
+            corps = res.json()
+            choix = corps.get("choices") or []
+            message = choix[0].get("message", {}) if choix else {}
+            contenu = message.get("content", "")
+            # Certains modèles renvoient le contenu sous forme de blocs texte.
+            if isinstance(contenu, list):
+                contenu = "".join(
+                    bloc.get("text", "") if isinstance(bloc, dict) else str(bloc)
+                    for bloc in contenu
+                )
+            texte = str(contenu or "").strip()
             if texte:
                 DERNIERE_ERREUR.pop("omniroute", None)
                 return texte
             DERNIERE_ERREUR["omniroute"] = (
                 "OmniRoute n'a renvoyé aucun texte. Vérifiez dans son tableau de bord > Providers "
                 "qu'au moins un fournisseur IA est connecté et actif, puis réessayez : "
-                "http://localhost:20128/dashboard/providers"
+                "ouvrez le dashboard OmniRoute de votre serveur."
             )
         elif res.status_code in (401, 403):
             DERNIERE_ERREUR["omniroute"] = ("OmniRoute refuse la clé (HTTP %d) : utilisez une clé d'endpoint créée dans le "
@@ -187,7 +252,11 @@ def appeler_omniroute(messages, temperature=0.4, max_tokens=700, timeout=40):
         else:
             DERNIERE_ERREUR["omniroute"] = f"OmniRoute a répondu HTTP {res.status_code} : {res.text[:150]}"
     except requests.exceptions.ConnectionError:
-        DERNIERE_ERREUR["omniroute"] = f"OmniRoute est injoignable à {OMNIROUTE['base_url']} : est-il lancé (commande « omniroute ») ?"
+        DERNIERE_ERREUR["omniroute"] = (
+            f"OmniRoute est injoignable à {OMNIROUTE['base_url'] or '(URL non configurée)'}. "
+            "Sur Streamlit Cloud, configurez OMNIROUTE_BASE_URL avec une URL HTTPS publique "
+            "accessible depuis le serveur, pas localhost."
+        )
     except Exception as e:
         DERNIERE_ERREUR["omniroute"] = f"Erreur OmniRoute : {str(e)[:150]}"
     print(DERNIERE_ERREUR.get("omniroute"))
@@ -761,8 +830,19 @@ def extraire_competences(cv_text):
 
 def _json_depuis_texte(txt):
     try:
-        m = re.search(r"\{.*\}", txt, re.S)
-        return json.loads(m.group(0)) if m else None
+        texte = str(txt or "").strip()
+        # Accepte les blocs Markdown souvent ajoutés malgré la consigne JSON strict.
+        texte = re.sub(r"^```(?:json)?\s*|\s*```$", "", texte, flags=re.I)
+        try:
+            return json.loads(texte)
+        except json.JSONDecodeError:
+            # Tolère un préambule ou un suffixe, sans fusionner plusieurs objets.
+            debut = texte.find("{")
+            if debut < 0:
+                return None
+            decoder = json.JSONDecoder()
+            data, _ = decoder.raw_decode(texte[debut:])
+            return data
     except Exception:
         return None
 
@@ -786,9 +866,10 @@ def analyser_cv(cv_text, skills, titre, competences_cible, description=""):
     if (not isinstance(data, dict) or not isinstance(data.get("resume"), str)
             or not data["resume"].strip() or not isinstance(data.get("recommandations"), list)
             or not data["recommandations"]):
+        detail = DERNIERE_ERREUR.get("omniroute", "Le modèle n'a pas renvoyé le format attendu.")
         DERNIERE_ERREUR["omniroute"] = (
-            "OmniRoute n'a pas renvoyé une synthèse et des recommandations valides. "
-            "Vérifiez le fournisseur et le modèle connectés, puis réessayez."
+            "OmniRoute a répondu, mais la synthèse ou les recommandations ne sont pas au format attendu. "
+            f"Détail : {detail} Vérifiez le modèle et son fournisseur, puis réessayez."
         )
         raise ErreurOmniRoute(DERNIERE_ERREUR["omniroute"])
     return {"score": score, "communes": communes, "manquantes": manquantes,
