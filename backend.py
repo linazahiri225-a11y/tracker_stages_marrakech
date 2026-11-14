@@ -3,6 +3,7 @@ import base64
 import json
 import os
 import time
+import unicodedata
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout, as_completed
 import random
@@ -455,13 +456,34 @@ def collecter_jawb(ville="Marrakech"):
     return pd.DataFrame(offres)
 
 
-def collecter_linkedin(keywords=("Data", "Informatique", "Développeur", "Stage"), ville="Marrakech"):
+MOTS_STAGE_OFFRE = ("stage", "stagiaire", "intern", "internship", "pfe", "apprentissage", "alternance")
+MOTS_DOMAINE_OFFRE = (
+    "data", "donnees", "intelligence artificielle", "artificial intelligence", "machine learning",
+    "deep learning", "business intelligence", "informatique", "computer science", "developpeur",
+    "developer", "software", "python", "sql", "power bi", "analyste", "analyst", "big data",
+)
+
+
+def _texte_normalise(texte):
+    texte = unicodedata.normalize("NFD", str(texte or "").casefold())
+    return "".join(c for c in texte if unicodedata.category(c) != "Mn")
+
+
+def offre_pertinente(titre, description="", competences=""):
+    """Vrai uniquement pour une offre de stage liée aux métiers data/IA/IT."""
+    titre_normalise = _texte_normalise(titre)
+    texte = _texte_normalise(f"{titre} {description} {competences}")
+    domaine_ia = bool(re.search(r"(?<!\w)ia(?!\w)", texte))
+    return (any(mot in titre_normalise for mot in MOTS_STAGE_OFFRE)
+            and (domaine_ia or any(mot in texte for mot in MOTS_DOMAINE_OFFRE)))
+
+
+def collecter_linkedin(keywords=("stage data", "stage intelligence artificielle", "stage informatique", "data intern"), ville="Marrakech"):
     offres, headers = [], {"User-Agent": "Mozilla/5.0"}
     for kw in keywords:
-        url = ("https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
-               f"?keywords={kw}&location={ville}&start=0")
+        url = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
         try:
-            res = requests.get(url, headers=headers, timeout=6)
+            res = requests.get(url, params={"keywords": kw, "location": ville, "start": 0}, headers=headers, timeout=6)
             if res.status_code != 200:
                 continue
             soup = BeautifulSoup(res.text, "html.parser")
@@ -473,21 +495,32 @@ def collecter_linkedin(keywords=("Data", "Informatique", "Développeur", "Stage"
                 if not (t and c and l):
                     continue
                 titre, entreprise = t.get_text(strip=True), c.get_text(strip=True)
+                loc = job.find("span", class_=re.compile("job-search-card__location|base-search-card__metadata"))
+                localisation = loc.get_text(" ", strip=True) if loc else ""
+                localisation_norm = _texte_normalise(localisation)
+                if not any(v in localisation_norm for v in ("marrakech", "marrakesh")):
+                    continue
+                if not offre_pertinente(titre):
+                    continue
                 lien = l["href"].split("?")[0]
+                if any(o.get("site_web") == lien for o in offres):
+                    continue
                 modele = {"domaine": "Informatique", "remuneration": "Non précisée", "duree": "Non précisée",
                           "description": "Consultez l'annonce originale.", "competences": "",
                           "missions": "", "profil": ""}
-                lat, lng, q = 31.6295, -7.9811, "Marrakech"
+                lat, lng, q = 31.6295, -7.9811, localisation or "Marrakech"
                 offres.append(_ligne(
                     f"linkedin_{abs(hash(lien))}", entreprise,
-                    titre, "Marrakech",
+                    titre, localisation or "Marrakech",
                     "", "", False, lien, "", 0, lat, lng,
                     "Offre LinkedIn", "LinkedIn", q, modele,
                     d.get_text(strip=True) if d else "Récemment"))
         except Exception as exc:
             DERNIERE_ERREUR["linkedin"] = f"Erreur LinkedIn ({kw}) : {exc}"
     if not offres and "linkedin" not in DERNIERE_ERREUR:
-        DERNIERE_ERREUR["linkedin"] = "Aucune offre retournée (résultats vides ou accès refusé)."
+        DERNIERE_ERREUR["linkedin"] = (
+            "Aucune offre LinkedIn ne correspond aux critères : stage/PFE, métier data/IA/IT et localisation Marrakech."
+        )
     return pd.DataFrame(offres)
 
 

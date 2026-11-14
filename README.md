@@ -57,6 +57,8 @@ L'appel Gemini est utilisé dès que `GEMINI_API_KEY` est défini ; sinon, l'app
 
 Les PDF, profils et fichiers CSV locaux sont exclus de Git. Ils ne sont donc pas automatiquement présents après déploiement ; ajoutez une gestion de données adaptée si l'application doit retrouver les mêmes fichiers en production.
 
+Les annonces affichées sont filtrées pour garder les stages/PFE en data, IA ou informatique et les offres LinkedIn dont la localisation mentionne Marrakech. Les résultats LinkedIn publics peuvent changer ou être limités par LinkedIn ; vérifiez toujours l'annonce d'origine avant de candidater.
+
 Google Maps sert à rechercher des entreprises ; les lignes Maps ne sont pas des offres d'emploi. Les sources d'annonces actuellement intégrées sont LinkedIn et le flux RSS Jawb. Leur disponibilité dépend de leur accès réseau et du format renvoyé par les sites.
 
 ## Publier sur GitHub

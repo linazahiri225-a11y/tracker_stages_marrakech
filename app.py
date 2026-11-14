@@ -94,7 +94,12 @@ def charger_entreprises(df_offres):
 profil = st.session_state.setdefault("profil", backend.charger_profil())
 st.session_state.setdefault("tab", T_OFFRES)
 DONNEES = charger_offres()
-OFFRES = DONNEES[DONNEES["source"].astype(str).str.casefold() != "google places"].copy()
+OFFRES = DONNEES[
+    (DONNEES["source"].astype(str).str.casefold() != "google places")
+    & DONNEES.apply(lambda r: backend.offre_pertinente(
+        r.get("titre_offre", ""), r.get("description", ""), r.get("competences", "")
+    ), axis=1)
+].copy()
 ENTS = charger_entreprises(DONNEES)
 OFFRE_PAR_ID = {r["place_id"]: r.to_dict() for _, r in OFFRES.iterrows()}
 ENT_PAR_NOM = {r["nom"]: r.to_dict() for _, r in ENTS.iterrows()}
@@ -592,6 +597,9 @@ elif tab == T_ANALYSE:
         lancer = b.button("✨ Lancer l'Analyse du CV", type="primary", use_container_width=True, key="an_go")
         x, y = st.columns([2, 1])
         if mode == M_OFFRE:
+            if OFFRES.empty:
+                st.info("Aucune offre de stage IA, data ou informatique à Marrakech n'a été collectée. Relancez la collecte ou choisissez le mode entreprise.")
+                st.stop()
             pid = x.selectbox("Sélectionnez l'offre de stage à Marrakech :", list(OFFRE_PAR_ID), format_func=libelle_offre, key="an_offre")
             o = OFFRE_PAR_ID[pid]
             cible = {"titre": o["titre_offre"], "nom": o["nom"], "competences": o["competences"], "description": o.get("description", ""),
@@ -656,6 +664,9 @@ elif tab == T_EMAIL:
         ton = b.radio("Tonalité", backend.TONS, index=1, horizontal=True, key="em_ton")
         x, y = st.columns([3, 1])
         if mode == E_OFFRE:
+            if OFFRES.empty:
+                st.info("Aucune offre de stage IA, data ou informatique à Marrakech n'a été collectée. Relancez la collecte ou choisissez la candidature spontanée.")
+                st.stop()
             pid = x.selectbox("Sélectionnez l'offre de stage visée :", list(OFFRE_PAR_ID), format_func=libelle_offre, key="em_offre")
             o = OFFRE_PAR_ID[pid]
             cib = dict(nom=o["nom"], poste=o["titre_offre"], dest=o.get("email_contact", ""), comp=o["competences"],
