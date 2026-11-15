@@ -379,7 +379,7 @@ if DONNEES.empty and tab in (T_OFFRES, T_CARTE, T_ANALYSE, T_EMAIL):
 # 1. OFFRES
 # ==========================================
 if tab == T_OFFRES:
-    hero("offres", "✨ Agrégateur Exclusif Marrakech • Data & IA", "Trouvez votre Stage IT & IA / Data Analyst à Marrakech",
+    hero("offres", "✨ Agrégateur Marrakech • Data, IA & IT", "Trouvez votre stage Data, IA ou informatique à Marrakech",
          "Les annonces réelles collectées depuis les sources configurées. Les entreprises trouvées sur Google Maps "
          "sont affichées dans l'onglet Carte, séparément des offres. Générez vos candidatures avec l'IA.")
     panneau_collecte()
@@ -396,7 +396,7 @@ if tab == T_OFFRES:
         quartier = f2.selectbox("Quartier à Marrakech", ["Tous les quartiers"] + backend.QUARTIERS)
         type_stage = f3.selectbox("Type de stage", ["Tous les types"] + sorted(t for t in OFFRES["type_stage"].unique() if t))
 
-    st.caption("Les annonces sont collectées depuis les pages publiques de PostulerCV et Stagiaires.ma, le flux RSS de Jawb et, en complément, LinkedIn. Google Maps sert uniquement à repérer les entreprises.")
+    st.caption("Recherche élargie : Data Analyst, Data Science, Power BI/BI, IA/ML, développement logiciel/web, cybersécurité, réseaux, cloud et autres stages IT. Les offres non techniques sont écartées même si leur description cite l'IA.")
 
     df = OFFRES.copy()
     if source != "Toutes":

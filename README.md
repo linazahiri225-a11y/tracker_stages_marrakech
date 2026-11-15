@@ -57,7 +57,7 @@ L'appel Gemini est utilisé dès que `GEMINI_API_KEY` est défini ; sinon, l'app
 
 Les PDF, profils et fichiers CSV locaux sont exclus de Git. Ils ne sont donc pas automatiquement présents après déploiement ; ajoutez une gestion de données adaptée si l'application doit retrouver les mêmes fichiers en production.
 
-Les annonces affichées sont filtrées pour ne garder que les stages/PFE orientés data ou IA à Marrakech. Les offres sont recherchées sur les pages publiques de PostulerCV et Stagiaires.ma, dans le flux RSS Jawb (flux général de Marrakech et filtres métier) et, en complément, sur LinkedIn. Ces pages ne garantissent pas une API stable ; vérifiez chaque annonce sur son lien d'origine. Google Maps sert uniquement à rechercher des entreprises, pas à créer des offres.
+Les annonces affichées ciblent les stages/PFE data, IA et métiers IT à Marrakech : Data Analyst, Data Science, Power BI/BI, machine learning, développement web/logiciel, cybersécurité, réseaux et cloud. Une simple mention de l'IA dans une annonce marketing ne suffit pas à la faire apparaître. Les offres sont recherchées sur PostulerCV, Stagiaires.ma, le flux RSS Jawb (flux général de Marrakech et filtres métier) et LinkedIn, avec plusieurs mots-clés par source. Les pages des sources ne garantissent pas une API stable ; vérifiez chaque annonce sur son lien d'origine. Google Maps sert uniquement à rechercher des entreprises, pas à créer des offres.
 
 Les sites de recrutement intégrés sont des sources publiques gratuites, pas des bases « open source » au sens de données sous licence ouverte. Leur disponibilité dépend de l'accès et du format de chaque site.
 

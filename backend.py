@@ -415,13 +415,14 @@ def collecter_jawb(ville="Marrakech"):
     ns = {"content": "http://purl.org/rss/1.0/modules/content/"}
     # Le flux accepte des filtres métier, mais ils peuvent éliminer des annonces
     # dont les catégories ne sont pas renseignées. Toujours lire aussi le flux ville.
-    for metier in (None, "data", "intelligence artificielle", "informatique"):
+    for metier in (None, "data", "data science", "power bi", "intelligence artificielle",
+                   "développeur informatique", "cybersécurité"):
         try:
             params = {"ville": ville}
             if metier:
                 params["metier"] = metier
             res = requests.get(url, params=params,
-                               headers={"User-Agent": "MarrakechStage/1.0 (lecteur RSS)"}, timeout=15)
+                               headers={"User-Agent": "MarrakechStage/1.0 (lecteur RSS)"}, timeout=10)
             if res.status_code != 200:
                 erreurs.append(f"HTTP {res.status_code}" + (f" pour {metier}" if metier else ""))
                 continue
@@ -450,7 +451,7 @@ def collecter_jawb(ville="Marrakech"):
             date_pub = champ("pubDate")
             offres.append(_ligne(
                 f"jawb_{abs(hash(lien))}", entreprise, titre, ville, "", "", False, lien,
-                "", 0, 31.6295, -7.9811, "Data / IA", "Jawb", ville, modele_vide,
+                "", 0, 31.6295, -7.9811, "IT / Data / IA", "Jawb", ville, modele_vide,
                 date_pub or "Récemment"))
             offres[-1]["description"] = description
             contract = champ("category")
@@ -465,10 +466,23 @@ MOTS_STAGE_OFFRE = ("stage", "stagiaire", "intern", "internship", "pfe", "appren
 MOTS_DOMAINE_OFFRE = (
     "data", "donnees", "intelligence artificielle", "artificial intelligence", "machine learning",
     "deep learning", "business intelligence", "power bi", "analyse de donnees", "analyste de donnees",
-    "analyste des donnees", "data analyst",
-    "data scientist", "data engineer", "data science", "big data", "data mining", "analytics",
-    "statistiques", "python data",
+    "analyste des donnees", "data analyst", "data scientist", "data engineer", "data science",
+    "big data", "data mining", "analytics", "statistiques", "python data", "informatique", "tech",
+    "developpeur", "developer", "software", "logiciel", "developpement web", "full stack", "fullstack",
+    "cybersecurite", "cyber security", "cybersecurity", "reseau", "network", "systeme informatique",
+    "cloud", "devops", "technicien it", "support informatique", "testeur logiciel", "software tester",
+    "sap ewm", "bases de donnees", "database", "etl", "sql", "tableau", "dax", "python", "java",
+    "ia", "ai", "ml", "bi", "it", "qa", "analyst", "analyste", "scientist", "reporting",
+    "powerbi", "power query", "business analyst", "data quality", "data governance", "engineer",
 )
+MOTS_COMPETENCES_TECH = (
+    "power bi", "business intelligence", "data analyst", "data science", "machine learning",
+    "deep learning", "sql", "python", "tableau", "dax", "etl", "bases de donnees", "database",
+    "developpement logiciel", "developpement web", "javascript", "react", "java", "cloud", "devops",
+    "cybersecurite", "cybersecurity", "linux", "windows server", "sap ewm", "test logiciel", "qa testing",
+    "powerbi", "power query", "data governance", "data quality", "business analyst", "excel",
+)
+MOTS_EXCLUSION_TITRE = ("marketing", "communication", "seo", "commercial", "vente", "rh", "recrutement")
 
 
 def _texte_normalise(texte):
@@ -476,18 +490,41 @@ def _texte_normalise(texte):
     return "".join(c for c in texte if unicodedata.category(c) != "Mn")
 
 
+def _contient_mot_cle(texte, mot):
+    texte, mot = _texte_normalise(texte), _texte_normalise(mot)
+    if mot in {"ia", "ai", "it", "bi", "ml", "qa", "r"}:
+        return bool(re.search(rf"(?<!\w){re.escape(mot)}(?!\w)", texte))
+    return mot in texte
+
+
+def poste_tech_pertinent(titre):
+    """Reconnaît les intitulés data, IA et métiers informatiques demandés."""
+    titre_norm = _texte_normalise(titre)
+    contient_role = any(_contient_mot_cle(titre_norm, mot) for mot in MOTS_DOMAINE_OFFRE)
+    contient_exclusion = any(_contient_mot_cle(titre_norm, mot) for mot in MOTS_EXCLUSION_TITRE)
+    # Une spécialité technique explicite dans l'intitulé prévaut sur un intitulé
+    # mixte (ex. Marketing Data Analyst), sinon les rôles marketing seuls sont exclus.
+    return contient_role and (not contient_exclusion or any(
+        _contient_mot_cle(titre_norm, mot) for mot in (
+            "data", "power bi", "business intelligence", "analyste", "analyst", "scientist",
+            "machine learning", "intelligence artificielle", "cybersecurite", "developpeur", "developer")))
+
+
 def offre_pertinente(titre, description="", competences=""):
-    """Vrai uniquement pour une offre de stage explicitement orientée data ou IA."""
+    """Vrai pour un stage data/IA/IT, sans retenir un rôle non technique qui le mentionne seulement."""
     titre_normalise = _texte_normalise(titre)
-    texte = _texte_normalise(f"{titre} {description} {competences}")
-    domaine_ia = bool(re.search(r"(?<!\w)(?:ia|ai)(?!\w)", texte))
+    description_norm = _texte_normalise(f"{description} {competences}")
     stage = any(mot in titre_normalise for mot in MOTS_STAGE_OFFRE) or any(
         mot in _texte_normalise(description) for mot in MOTS_STAGE_OFFRE)
-    return (stage
-            and (domaine_ia or any(mot in texte for mot in MOTS_DOMAINE_OFFRE)))
+    detail_tech = any(_contient_mot_cle(description_norm, mot) for mot in MOTS_COMPETENCES_TECH)
+    return stage and (poste_tech_pertinent(titre) or (any(
+        mot in titre_normalise for mot in MOTS_STAGE_OFFRE) and detail_tech))
 
 
-def collecter_linkedin(keywords=("stage data", "stage intelligence artificielle", "stage informatique", "data intern"), ville="Marrakech"):
+def collecter_linkedin(keywords=(
+        "stage data analyst", "stage data science", "stage Power BI", "stage business intelligence",
+        "stage machine learning", "stage intelligence artificielle", "stage informatique IT",
+        "stage cybersécurité", "stage développeur logiciel", "stage cloud DevOps"), ville="Marrakech"):
     offres, headers = [], {"User-Agent": "Mozilla/5.0"}
     for kw in keywords:
         url = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
@@ -549,7 +586,7 @@ def collecter_stagiaires_ma(ville="Marrakech"):
         return pd.DataFrame()
 
     offres, vus = [], set()
-    modele = {"domaine": "Data / IA", "remuneration": "Non précisée", "duree": "Non précisée",
+    modele = {"domaine": "IT / Data / IA", "remuneration": "Non précisée", "duree": "Non précisée",
               "description": "", "competences": "", "missions": "", "profil": ""}
     liens = soup.find_all("a", href=re.compile(r"/stage-emploi-maroc/"))
     # Certaines pages présentent le titre dans le lien, d'autres dans un titre
@@ -591,7 +628,7 @@ def collecter_stagiaires_ma(ville="Marrakech"):
                           and a.get_text(" ", strip=True)), "Entreprise (voir l'annonce)")
         offre = _ligne(
             f"stagiaires_{abs(hash(href))}", employeur, titre, ville, "", "", False, href,
-            "", 0, 31.6295, -7.9811, "Data / IA", "Stagiaires.ma", ville, modele, "Récemment")
+            "", 0, 31.6295, -7.9811, "IT / Data / IA", "Stagiaires.ma", ville, modele, "Récemment")
         offre["description"] = texte_bloc[:1200]
         offres.append(offre)
 
@@ -607,7 +644,7 @@ def collecter_postulercv(ville="Marrakech"):
     """Collecte les stages IT publics de PostulerCV, sans compte ni clé API."""
     url = "https://www.postulercv.ma/emploi/informatique-telecoms-marrakech-stage"
     headers = {"User-Agent": "Mozilla/5.0 (compatible; MarrakechStage/1.0)"}
-    modele = {"domaine": "Data / IA", "remuneration": "Non précisée", "duree": "Non précisée",
+    modele = {"domaine": "IT / Data / IA", "remuneration": "Non précisée", "duree": "Non précisée",
               "description": "", "competences": "", "missions": "", "profil": ""}
     try:
         res = requests.get(url, headers=headers, timeout=18)
@@ -633,13 +670,14 @@ def collecter_postulercv(ville="Marrakech"):
             bloc = parent
             if bloc.find(["h2", "h3", "h4"]):
                 break
-        titre_el = lien.find(["h2", "h3", "h4"]) or bloc.find(["h2", "h3", "h4"])
-        titre = titre_el.get_text(" ", strip=True) if titre_el else lien.get_text(" ", strip=True)
-        texte = bloc.get_text(" ", strip=True)
-        # La page catégorie est déjà dédiée aux stages IT à Marrakech. On garde
-        # uniquement les rôles data/IA, même si le terme « stage » est ailleurs.
-        if not offre_pertinente(titre, texte):
+        # Le lien contient le titre de l'annonce et ses métadonnées. Le titre
+        # de l'ancêtre peut être « Questions fréquentes » pour toute la page.
+        titre = lien.get_text(" ", strip=True)
+        if not poste_tech_pertinent(titre):
+            titre = lien.get("title") or lien.get("aria-label") or titre
+        if not offre_pertinente(titre):
             continue
+        texte = titre
         entreprise = "Entreprise (voir l'annonce)"
         # Le lien peut être situé dans la même carte que le titre.
         for mot in ("à", "chez", "–", "-"):
@@ -650,7 +688,7 @@ def collecter_postulercv(ville="Marrakech"):
                     break
         offre = _ligne(
             f"postulercv_{abs(hash(href))}", entreprise, titre, ville, "", "", False, href,
-            "", 0, 31.6295, -7.9811, "Data / IA", "PostulerCV", ville, modele, "Récemment")
+            "", 0, 31.6295, -7.9811, "IT / Data / IA", "PostulerCV", ville, modele, "Récemment")
         offre["description"] = texte[:1200]
         offres.append(offre)
     if not offres:
