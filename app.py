@@ -28,6 +28,24 @@ def e(v):
     return html.escape(str(v))
 
 
+def afficher_message(texte, niveau="info"):
+    """Affiche une alerte lisible sans dépendre des couleurs du thème Streamlit."""
+    couleurs = {
+        "info": ("#eff6ff", "#bfdbfe", "#1e3a8a"),
+        "success": ("#f0fdf4", "#bbf7d0", "#166534"),
+        "warning": ("#fffbeb", "#fde68a", "#854d0e"),
+        "error": ("#fef2f2", "#fecaca", "#991b1b"),
+    }
+    fond, bordure, couleur = couleurs.get(niveau, couleurs["info"])
+    role = "alert" if niveau in ("warning", "error") else "status"
+    st.markdown(
+        f'<div role="{role}" style="background:{fond};color:{couleur};border:1px solid {bordure};'
+        f'border-left:5px solid {couleur};border-radius:10px;padding:13px 16px;margin:8px 0;'
+        f'font-size:14px;line-height:1.55;white-space:pre-wrap;">{e(texte)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def norm(texte):
     """minuscules + sans accents, pour une recherche tolérante."""
     return "".join(c for c in unicodedata.normalize("NFD", str(texte).lower()) if unicodedata.category(c) != "Mn")
@@ -341,10 +359,10 @@ def panneau_collecte():
     """Lance le backend, puis conserve son bilan afin de l'afficher après le rerun Streamlit."""
     ancien_bilan = st.session_state.pop("bilan_collecte", None)
     if ancien_bilan:
-        st.warning(ancien_bilan)
+        afficher_message(ancien_bilan, "warning")
     if st.button("🔄 Lancer la collecte", type="primary", key="btn_collecte"):
         if not backend.GOOGLE_MAPS_API_KEY:
-            st.info("Google Maps n'est pas configuré : la collecte va quand même chercher les offres publiques de stage.")
+            afficher_message("Google Maps n'est pas configuré : la collecte va quand même chercher les offres publiques de stage.")
         barre = st.progress(0.0, text="Démarrage de la collecte...")
         res = backend.executer_collecte_complete(backend.GOOGLE_MAPS_API_KEY, progress=lambda p, t: barre.progress(p, text=t))
         barre.empty()
@@ -429,9 +447,9 @@ if tab == T_OFFRES:
                 unsafe_allow_html=True)
     if df.empty:
         if source != "Toutes" and source not in set(OFFRES["source"].astype(str)):
-            st.info(f"Aucune offre collectée depuis {source} pour le moment. Les entreprises Google Maps sont consultables dans l'onglet Carte.")
+            afficher_message(f"Aucune offre collectée depuis {source} pour le moment. Les entreprises Google Maps sont consultables dans l'onglet Carte.")
         else:
-            st.info("Aucune offre ne correspond à ces filtres.")
+            afficher_message("Aucune offre ne correspond à ces filtres.")
     for _, r in df.iterrows():
         o = r.to_dict()
         with st.container(border=True):
@@ -548,7 +566,7 @@ elif tab == T_CV:
                 if texte:
                     st.session_state.cv_text = texte
                 sauver_profil()
-                st.success("CV enregistré (il sera joint à vos e-mails).")
+                afficher_message("CV enregistré (il sera joint à vos e-mails).", "success")
             st.text_area("CV", value=profil["cv_text"], height=330, key="cv_text", label_visibility="collapsed", on_change=sauver_profil)
             b1, b2, b3 = st.columns([1.2, 1, 1.5])
             b1.download_button("⬇️ Télécharger mon CV (.txt)", st.session_state.get("cv_text", profil["cv_text"]), "mon_cv.txt", use_container_width=True)
@@ -559,7 +577,7 @@ elif tab == T_CV:
                     profil["skills"].append(c)
                 st.session_state.skills_sel = list(profil["skills"])
                 sauver_profil()
-                st.success(f"{len(nouvelles)} compétence(s) ajoutée(s) : {', '.join(nouvelles) or 'aucune nouvelle'}")
+                afficher_message(f"{len(nouvelles)} compétence(s) ajoutée(s) : {', '.join(nouvelles) or 'aucune nouvelle'}", "success")
         with cd:
             with st.container(border=True):
                 st.markdown("**Compétences Techniques & Outils**")
@@ -589,7 +607,7 @@ elif tab == T_CV:
                 if texte:
                     st.session_state.lettre_text = texte
                 sauver_profil()
-                st.success("Lettre enregistrée (elle sera jointe à vos e-mails).")
+                afficher_message("Lettre enregistrée (elle sera jointe à vos e-mails).", "success")
             st.text_area("Texte de la lettre (optionnel, pour référence)", value=profil["lettre_text"], height=300,
                          key="lettre_text", on_change=sauver_profil)
     with t3:
@@ -618,7 +636,7 @@ elif tab == T_ANALYSE:
         x, y = st.columns([2, 1])
         if mode == M_OFFRE:
             if OFFRES.empty:
-                st.info("Aucune offre de stage IA, data ou informatique à Marrakech n'a été collectée. Relancez la collecte ou choisissez le mode entreprise.")
+        afficher_message("Aucune offre de stage IA, data ou informatique à Marrakech n'a été collectée. Relancez la collecte ou choisissez le mode entreprise.")
                 st.stop()
             pid = x.selectbox("Sélectionnez l'offre de stage à Marrakech :", list(OFFRE_PAR_ID), format_func=libelle_offre, key="an_offre")
             o = OFFRE_PAR_ID[pid]
@@ -642,7 +660,7 @@ elif tab == T_ANALYSE:
             except backend.ErreurOmniRoute as exc:
                 st.session_state.an_err = str(exc)
     if st.session_state.get("an_err"):
-        st.error("Analyse IA non effectuée : " + st.session_state.an_err)
+        afficher_message("Analyse IA non effectuée : " + st.session_state.an_err, "error")
     res = st.session_state.get("an_res")
     if not res or res[0] != cible["titre"]:
         st.markdown('<div class="kpi empty"><div style="font-size:34px">🗂️</div><h4>Prêt pour l\'analyse</h4>'
@@ -685,7 +703,7 @@ elif tab == T_EMAIL:
         x, y = st.columns([3, 1])
         if mode == E_OFFRE:
             if OFFRES.empty:
-                st.info("Aucune offre de stage IA, data ou informatique à Marrakech n'a été collectée. Relancez la collecte ou choisissez la candidature spontanée.")
+                afficher_message("Aucune offre de stage IA, data ou informatique à Marrakech n'a été collectée. Relancez la collecte ou choisissez la candidature spontanée.")
                 st.stop()
             pid = x.selectbox("Sélectionnez l'offre de stage visée :", list(OFFRE_PAR_ID), format_func=libelle_offre, key="em_offre")
             o = OFFRE_PAR_ID[pid]
@@ -710,7 +728,7 @@ elif tab == T_EMAIL:
                 except backend.ErreurOmniRoute as exc:
                     st.session_state.em_generation_error = str(exc)
     if st.session_state.get("em_generation_error"):
-        st.error("E-mail non généré : " + st.session_state.em_generation_error)
+        afficher_message("E-mail non généré : " + st.session_state.em_generation_error, "error")
     if "em_corps" not in st.session_state:
         st.markdown('<div class="kpi empty"><div style="font-size:34px">✉️</div><h4>Prêt à rédiger votre email de candidature</h4>'
                     'Cliquez sur « Générer mon Email Personnalisé » pour concevoir un email sur-mesure adapté aux besoins de l\'entreprise.</div>',
@@ -720,14 +738,14 @@ elif tab == T_EMAIL:
         with st.container(border=True):
             st.markdown(f"**Brouillon pour {e(c['nom'])}** · {e(c['type'])}")
             if not c["ok"]:
-                st.warning("Cette adresse e-mail n'a pas été vérifiée (donnée de démonstration ou estimée). Contrôlez-la avant d'envoyer.")
+                afficher_message("Cette adresse e-mail n'a pas été vérifiée (donnée de démonstration ou estimée). Contrôlez-la avant d'envoyer.", "warning")
             st.text_input("Destinataire", key="em_dest")
             st.text_input("Sujet", key="em_suj")
             st.text_area("Message (modifiable)", key="em_corps", height=280)
             pj = pieces_jointes()
             st.caption("📎 Pièces jointes : " + (", ".join(pj) if pj else "aucune (importez votre CV et votre lettre dans « Mon CV & Lettre »)"))
             etat_gm, msg_gm = backend.gmail_statut()
-            (st.success if etat_gm == "pret" else st.warning if etat_gm == "credentials_manquant" else st.info)(msg_gm)
+            afficher_message(msg_gm, "success" if etat_gm == "pret" else "warning" if etat_gm == "credentials_manquant" else "info")
             s1, s2 = st.columns(2)
             if s1.button("📨 Envoyer l'e-mail (API Gmail)", type="primary", use_container_width=True):
                 with st.spinner("Envoi par l'API Gmail… (la première fois, une page Google s'ouvre pour l'autorisation)"):
@@ -735,12 +753,12 @@ elif tab == T_EMAIL:
                                                                 st.session_state.em_corps, profil["email"], CV_PATH, LETTRE_PATH)
                 if ok:
                     backend.ajouter_suivi(c["nom"], c["poste"], c["type"], st.session_state.em_dest, "Envoyé")
-                    st.success(msg + " Ajouté au suivi.")
+                    afficher_message(msg + " Ajouté au suivi.", "success")
                 else:
-                    st.error(msg)
+                    afficher_message(msg, "error")
             if s2.button("💾 Enregistrer sans envoyer (relance à faire)", use_container_width=True):
                 backend.ajouter_suivi(c["nom"], c["poste"], c["type"], st.session_state.em_dest, "Relance à faire", "Brouillon")
-                st.success("Ajouté au suivi.")
+                afficher_message("Ajouté au suivi.", "success")
             st.download_button("⬇️ Télécharger le mail avec pièces jointes (.eml)",
                                backend.construire_eml(st.session_state.em_dest, st.session_state.em_suj, st.session_state.em_corps,
                                                       profil["email"], pieces_jointes()),
@@ -807,7 +825,7 @@ elif tab == T_SUIVI:
     if rech:
         V = recherche(V, rech, ("nom", "titre", "email", "type"))
     if V.empty:
-        st.info("Aucune candidature pour le moment. Envoyez un e-mail depuis l'onglet « Email & Candidature » : elle apparaîtra ici.")
+        afficher_message("Aucune candidature pour le moment. Envoyez un e-mail depuis l'onglet « Email & Candidature » : elle apparaîtra ici.")
     for _, r in V.sort_values("date", ascending=False).iterrows():
         with st.container(border=True):
             a, b, c1, c2 = st.columns([5, 1.6, 0.4, 0.4])
