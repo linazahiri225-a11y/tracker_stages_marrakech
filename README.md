@@ -49,9 +49,10 @@ Pour éviter l'hébergement OmniRoute payant, l'application peut appeler directe
 ```toml
 GEMINI_API_KEY = "votre-cle-api-gemini"
 GEMINI_MODEL = "gemini-3.1-flash-lite"
+GEMINI_FALLBACK_MODEL = "gemini-3.5-flash-lite"
 ```
 
-Enregistrez les secrets, puis attendez le redémarrage de l'application et relancez l'analyse. Gemini propose un niveau gratuit soumis à des limites d'utilisation susceptibles de changer ; consultez les [tarifs et limites actuels](https://ai.google.dev/gemini-api/docs/pricing). Le niveau gratuit indique que les contenus envoyés peuvent être utilisés pour améliorer les produits Google : évitez d'envoyer des informations confidentielles ou personnelles dans le CV. Les secrets Streamlit et variables d'environnement sont prioritaires sur `config.py` local. Ne mettez aucune clé réelle dans GitHub.
+Enregistrez les secrets, puis attendez le redémarrage de l'application et relancez l'analyse. En cas d'erreur 503 (surcharge temporaire), l'application réessaie une fois puis bascule sur `GEMINI_FALLBACK_MODEL`. Gemini propose un niveau gratuit soumis à des limites d'utilisation susceptibles de changer ; consultez les [tarifs et limites actuels](https://ai.google.dev/gemini-api/docs/pricing). Le niveau gratuit indique que les contenus envoyés peuvent être utilisés pour améliorer les produits Google : évitez d'envoyer des informations confidentielles ou personnelles dans le CV. Les secrets Streamlit et variables d'environnement sont prioritaires sur `config.py` local. Ne mettez aucune clé réelle dans GitHub.
 
 L'appel Gemini est utilisé dès que `GEMINI_API_KEY` est défini ; sinon, l'application essaie la configuration OmniRoute habituelle.
 

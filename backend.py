@@ -58,6 +58,7 @@ OMNIROUTE = {
 }
 GEMINI_API_KEY = _cfg("GEMINI_API_KEY")
 GEMINI_MODEL = _cfg("GEMINI_MODEL", "gemini-3.1-flash-lite")
+GEMINI_FALLBACK_MODEL = _cfg("GEMINI_FALLBACK_MODEL", "gemini-3.5-flash-lite")
 
 PROFIL = {
     "nom": "Lina Zahiri",
@@ -169,7 +170,6 @@ def tester_omniroute(timeout=4):
 def appeler_omniroute(messages, temperature=0.4, max_tokens=700, timeout=40):
     # En production, Gemini peut remplacer OmniRoute sans héberger de passerelle.
     if GEMINI_API_KEY:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
         system_text = "\n\n".join(m["content"] for m in messages if m.get("role") == "system")
         contents = [
             {"role": "model" if m.get("role") == "assistant" else "user",
@@ -184,30 +184,54 @@ def appeler_omniroute(messages, temperature=0.4, max_tokens=700, timeout=40):
             payload["systemInstruction"] = {"parts": [{"text": system_text}]}
         if "json strict" in system_text.lower():
             payload["generationConfig"]["responseMimeType"] = "application/json"
-        try:
-            res = requests.post(
-                url, headers={"x-goog-api-key": GEMINI_API_KEY, "Content-Type": "application/json"},
-                json=payload, timeout=timeout,
-            )
-            if res.status_code != 200:
-                detail = res.text[:250]
-                DERNIERE_ERREUR["omniroute"] = f"Gemini a répondu HTTP {res.status_code} : {detail}"
-                print(DERNIERE_ERREUR["omniroute"])
-                return None
-            data = res.json()
-            parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-            texte = "".join(p.get("text", "") for p in parts if isinstance(p, dict)).strip()
-            if texte:
-                DERNIERE_ERREUR.pop("omniroute", None)
-                return texte
-            DERNIERE_ERREUR["omniroute"] = "Gemini n'a renvoyé aucun texte. Vérifiez le modèle et la réponse de sécurité."
-            return None
-        except requests.exceptions.Timeout:
-            DERNIERE_ERREUR["omniroute"] = "Gemini met trop de temps à répondre. Réessayez dans quelques instants."
-        except requests.exceptions.ConnectionError:
-            DERNIERE_ERREUR["omniroute"] = "Impossible de joindre l'API Gemini depuis le serveur Streamlit."
-        except Exception as e:
-            DERNIERE_ERREUR["omniroute"] = f"Erreur Gemini : {str(e)[:150]}"
+        modeles = list(dict.fromkeys(m for m in (GEMINI_MODEL, GEMINI_FALLBACK_MODEL) if m))
+        for index, modele in enumerate(modeles):
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{modele}:generateContent"
+            # Sur 503, on retente une fois le modèle demandé, puis on passe au
+            # modèle léger de secours configuré (Flash-Lite par défaut).
+            for tentative in range(2):
+                try:
+                    res = requests.post(
+                        url, headers={"x-goog-api-key": GEMINI_API_KEY, "Content-Type": "application/json"},
+                        json=payload, timeout=timeout,
+                    )
+                    if res.status_code == 200:
+                        data = res.json()
+                        parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+                        texte = "".join(p.get("text", "") for p in parts if isinstance(p, dict)).strip()
+                        if texte:
+                            DERNIERE_ERREUR.pop("omniroute", None)
+                            return texte
+                        DERNIERE_ERREUR["omniroute"] = (
+                            f"Gemini ({modele}) n'a renvoyé aucun texte. Vérifiez le modèle et la réponse de sécurité."
+                        )
+                        return None
+
+                    detail = res.text[:250]
+                    if res.status_code == 503:
+                        DERNIERE_ERREUR["omniroute"] = (
+                            f"Gemini ({modele}) est temporairement surchargé (HTTP 503). "
+                            "L'application a réessayé et utilisé son modèle de secours ; aucun n'a répondu. "
+                            "Attendez quelques minutes puis relancez."
+                        )
+                    else:
+                        DERNIERE_ERREUR["omniroute"] = f"Gemini ({modele}) a répondu HTTP {res.status_code} : {detail}"
+                    if res.status_code == 503 and tentative == 0:
+                        time.sleep(1.2)
+                        continue
+                    if res.status_code == 503 and index + 1 < len(modeles):
+                        break
+                    print(DERNIERE_ERREUR["omniroute"])
+                    return None
+                except requests.exceptions.Timeout:
+                    DERNIERE_ERREUR["omniroute"] = f"Gemini ({modele}) met trop de temps à répondre. Réessayez."
+                    return None
+                except requests.exceptions.ConnectionError:
+                    DERNIERE_ERREUR["omniroute"] = "Impossible de joindre l'API Gemini depuis le serveur Streamlit."
+                    return None
+                except Exception as e:
+                    DERNIERE_ERREUR["omniroute"] = f"Erreur Gemini ({modele}) : {str(e)[:150]}"
+                    return None
         print(DERNIERE_ERREUR.get("omniroute"))
         return None
 
