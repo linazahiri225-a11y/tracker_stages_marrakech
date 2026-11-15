@@ -636,7 +636,7 @@ elif tab == T_ANALYSE:
         x, y = st.columns([2, 1])
         if mode == M_OFFRE:
             if OFFRES.empty:
-        afficher_message("Aucune offre de stage IA, data ou informatique à Marrakech n'a été collectée. Relancez la collecte ou choisissez le mode entreprise.")
+                afficher_message("Aucune offre de stage IA, data ou informatique à Marrakech n'a été collectée. Relancez la collecte ou choisissez le mode entreprise.")
                 st.stop()
             pid = x.selectbox("Sélectionnez l'offre de stage à Marrakech :", list(OFFRE_PAR_ID), format_func=libelle_offre, key="an_offre")
             o = OFFRE_PAR_ID[pid]
