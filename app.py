@@ -207,6 +207,22 @@ div[data-testid="stVerticalBlockBorderWrapper"] { background:#fff; border:1px so
 [data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] li,
 [data-testid="stWidgetLabel"] p, [data-testid="stCaptionContainer"], label, .stRadio label p, .stCheckbox label p { color:#1c1917; }
 [data-testid="stCaptionContainer"] { color:#78716c; }
+/* Messages Streamlit : fonds clairs et texte lisible, même en thème navigateur sombre. */
+[data-testid="stAlert"] {
+  background:#fff7ed !important;
+  color:#292524 !important;
+  border:1px solid #fdba74 !important;
+  border-left:5px solid #a14a07 !important;
+  border-radius:10px !important;
+}
+[data-testid="stAlert"] :is(p,span,li,div) {
+  color:#292524 !important;
+  -webkit-text-fill-color:#292524 !important;
+}
+[data-testid="stAlert"] svg {
+  color:#a14a07 !important;
+  fill:#a14a07 !important;
+}
 [data-baseweb="input"], [data-baseweb="base-input"], [data-baseweb="select"] > div, [data-baseweb="textarea"], textarea, input {
   background:#fff !important; color:#1c1917 !important; -webkit-text-fill-color:#1c1917 !important; }
 [data-baseweb="input"], [data-baseweb="select"] > div, [data-baseweb="textarea"] { border:1px solid #e7e5e4 !important; border-radius:10px !important; }
