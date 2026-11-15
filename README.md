@@ -23,7 +23,23 @@ Copy-Item config.example.py config.py
 
 Ouvre ensuite `config.py` et renseigne localement les clés et chemins requis. Ne publie jamais `config.py`, `credentials.json`, `token.json`, les PDF personnels ou les CSV locaux. Ces fichiers sont exclus par `.gitignore`.
 
-Pour Gmail, place le fichier OAuth téléchargé de Google Cloud à l'emplacement configuré. Au premier envoi, autorise l'application depuis le navigateur.
+Pour utiliser Gmail en local, active Gmail API dans Google Cloud, télécharge un client OAuth de type « Application de bureau » sous `credentials.json`, lance l'application puis clique sur « Connecter Gmail ». Google crée alors `token.json` après votre autorisation. Ne versionnez ni `credentials.json` ni `token.json`.
+
+### Gmail sur Streamlit Community Cloud
+
+Le fichier `credentials.json` est volontairement exclu de Git : sa simple présence sur votre ordinateur ne le rend pas disponible dans le conteneur Cloud. Pour envoyer depuis l'application déployée :
+
+1. Autorisez Gmail une fois en local avec le bouton « Connecter Gmail » ci-dessus.
+2. Ouvrez `token.json` localement et copiez tout son contenu JSON.
+3. Dans Streamlit, ouvrez **Manage app > Settings > Secrets**, puis ajoutez ce secret en remplaçant le texte d'exemple par le contenu complet du fichier :
+
+   ```toml
+   GMAIL_TOKEN_JSON = '''COLLER_ICI_LE_CONTENU_COMPLET_DE_token.json'''
+   ```
+
+4. Enregistrez les Secrets et attendez le redémarrage de l'application. Ne collez jamais le jeton dans GitHub ou dans le code.
+
+Si l'écran OAuth Google est en mode **Testing**, le jeton de rafraîchissement peut expirer après 7 jours. Google documente cette limite ; pour un accès durable, vérifiez les exigences de publication de l'écran OAuth. Les annonces d'emploi ne publient pas toujours l'adresse du recruteur : l'application ne fabrique plus d'adresses e-mail. Elle cherche uniquement les adresses présentes sur les sites publics des entreprises, et vous pouvez ouvrir l'annonce puis saisir manuellement un contact.
 
 ## Lancer l'application
 

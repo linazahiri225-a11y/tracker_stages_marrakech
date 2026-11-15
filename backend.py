@@ -346,42 +346,56 @@ def extraire_emails_du_site(website_url):
         return None
     if any(d in website_url.lower() for d in SITES_IGNORES):
         return None
-    pages = [website_url, urllib.parse.urljoin(website_url, "/contact")]
+    pages = [website_url]
     headers = {"User-Agent": "Mozilla/5.0"}
     pattern = r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
     trouves = set()
-    for page in pages:
+    hotes = {urllib.parse.urlparse(website_url).netloc.lower().removeprefix("www.")}
+    chemins_contact = ("/contact", "/contactez-nous", "/nous-contacter", "/careers", "/recrutement")
+    index = 0
+    while index < len(pages) and index < 4:
+        page = pages[index]
+        index += 1
         try:
             req = urllib.request.Request(page, headers=headers)
-            with urllib.request.urlopen(req, timeout=4) as r:
-                html = r.read().decode("utf-8", errors="ignore")
-            for mail in re.findall(pattern, html):
+            with urllib.request.urlopen(req, timeout=3) as r:
+                contenu = r.read().decode("utf-8", errors="ignore")
+            soup = BeautifulSoup(contenu, "html.parser")
+            texte_html = soup.get_text(" ", strip=True)
+            candidats = re.findall(pattern, contenu) + re.findall(pattern, texte_html)
+            for ancre in soup.find_all("a", href=True):
+                cible = urllib.parse.urljoin(page, ancre["href"])
+                hote_cible = urllib.parse.urlparse(cible).netloc.lower().removeprefix("www.")
+                contexte = f"{ancre.get_text(' ', strip=True)} {ancre['href']}".casefold()
+                if hote_cible in hotes and any(mot in contexte for mot in (
+                        "contact", "recrut", "career", "emploi", "job", "nous joindre")):
+                    if cible not in pages and len(pages) < 4:
+                        pages.append(cible)
+                if ancre["href"].lower().startswith("mailto:"):
+                    candidats.append(ancre["href"].split(":", 1)[1].split("?", 1)[0])
+            if index == 1 and len(pages) == 1:
+                pages.extend(urllib.parse.urljoin(website_url, chemin) for chemin in chemins_contact[:3])
+            for mail in candidats:
                 m = mail.lower().strip().rstrip(".")
-                if not any(x in m for x in (".png", ".jpg", ".jpeg", ".svg", ".webp", "w3.org", "example", "sentry")):
+                if ("@" in m and not any(x in m for x in (
+                        ".png", ".jpg", ".jpeg", ".svg", ".webp", "w3.org", "example", "sentry",
+                        "noreply", "no-reply", "cloudflare"))):
                     trouves.add(m)
-            rh = [m for m in trouves if any(k in m for k in ("recrutement", "rh", "careers", "job", "contact"))]
+            rh = sorted(m for m in trouves if any(k in m for k in (
+                "recrutement", "rh", "careers", "career", "job", "contact", "emploi")))
             if rh:
                 return rh[0]
         except Exception:
             continue
-    return next(iter(trouves), None)
+    return sorted(trouves)[0] if trouves else None
 
 
 def obtenir_email_normalise(nom_entreprise, website_url):
-    """Retourne (email, verifie). verifie=False si l'adresse est seulement estimée."""
+    """Retourne seulement une adresse publiée sur le site, jamais une adresse devinée."""
     reel = extraire_emails_du_site(website_url)
     if reel:
         return reel, True
-    domaine = None
-    if website_url and str(website_url).startswith("http"):
-        try:
-            domaine = urllib.parse.urlparse(website_url).netloc.replace("www.", "")
-        except Exception:
-            pass
-    if not domaine or len(domaine) < 3:
-        propre = re.sub(r"[^a-z0-9]", "", nom_entreprise.lower())
-        domaine = f"{propre}.ma"
-    return f"recrutement@{domaine}", False
+    return "", False
 
 
 # ------------------------------------------------------------------
@@ -737,15 +751,14 @@ def nettoyer_donnees(df_brut):
 
 
 def _email_estime(nom, site):
-    domaine = None
-    if site and str(site).startswith("http"):
-        try:
-            domaine = urllib.parse.urlparse(site).netloc.replace("www.", "")
-        except Exception:
-            pass
-    if not domaine or len(domaine) < 3:
-        domaine = re.sub(r"[^a-z0-9]", "", nom.lower()) + ".ma"
-    return f"recrutement@{domaine}", False
+    # Pas de « recrutement@domaine » fabriqué : un faux destinataire est pire
+    # qu'une case vide, car il peut faire croire que l'adresse a été collectée.
+    return "", False
+
+
+def adresse_email_valide(adresse):
+    """Validation de forme pour empêcher l'envoi avec un destinataire vide/incomplet."""
+    return bool(re.fullmatch(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", str(adresse or "").strip()))
 
 
 def executer_collecte_complete(api_key, queries=DEFAULT_QUERIES, progress=None, budget_s=75):
@@ -859,6 +872,7 @@ def mettre_a_jour_statut(place_id, nouveau_statut, canal, notes):
 GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 GMAIL_CREDENTIALS = _cfg("GMAIL_CREDENTIALS_FILE", "credentials.json") 
 GMAIL_TOKEN = _cfg("GMAIL_TOKEN_FILE", "token.json")                    # créé automatiquement après la première autorisation
+GMAIL_TOKEN_JSON = _cfg("GMAIL_TOKEN_JSON", "")  # token utilisateur dans les Secrets Streamlit (Cloud)
 MSG_LIBS_GOOGLE = (
     "Bibliothèques Google absentes de l'environnement Python qui exécute l'application. "
     f"Installez-les avec : \"{sys.executable}\" -m pip install "
@@ -871,14 +885,27 @@ def gmail_statut():
     """Retourne (état, message) : 'pret', 'a_autoriser' ou 'credentials_manquant'."""
     if os.path.exists(GMAIL_TOKEN):
         return "pret", "✅ Gmail autorisé : l'envoi se fait par l'API Gmail (HTTPS), depuis votre adresse."
+    if GMAIL_TOKEN_JSON:
+        try:
+            info = json.loads(GMAIL_TOKEN_JSON)
+            if isinstance(info, dict) and info.get("refresh_token") and info.get("client_id"):
+                return "pret", "✅ Jeton Gmail chargé depuis les Secrets Streamlit."
+        except (TypeError, json.JSONDecodeError):
+            return "credentials_manquant", "Le secret GMAIL_TOKEN_JSON est invalide : collez le contenu JSON complet de token.json."
+        return "credentials_manquant", "Le secret GMAIL_TOKEN_JSON est incomplet : il doit contenir un refresh_token OAuth Gmail."
     if os.path.exists(GMAIL_CREDENTIALS):
-        return "a_autoriser", ("Gmail pas encore autorisé : au premier envoi, une page Google s'ouvre dans votre navigateur. "
-                               "Choisissez votre compte et acceptez, puis revenez ici.")
+        return "a_autoriser", ("Gmail est prêt à être connecté sur cet ordinateur : cliquez sur « Connecter Gmail » et autorisez l'accès. "
+                               "Sur Streamlit Cloud, utilisez plutôt le secret GMAIL_TOKEN_JSON.")
     return "credentials_manquant", (f"Fichier « {GMAIL_CREDENTIALS} » introuvable à côté d'app.py. Activez Gmail API dans Google Cloud, "
-                                    "créez un ID client OAuth « Application de bureau » et téléchargez le JSON sous ce nom.")
+                                    "créez un ID client OAuth « Application de bureau ». En local, autorisez Gmail puis ajoutez le contenu de token.json "
+                                    "aux Secrets Streamlit sous GMAIL_TOKEN_JSON. Ne publiez jamais ce jeton sur GitHub.")
 
 
 def _sauver_token(creds):
+    if GMAIL_TOKEN_JSON:
+        # Sur Community Cloud, le token reste dans les Secrets; le système de fichiers
+        # du conteneur ne constitue pas un stockage durable.
+        return
     with open(GMAIL_TOKEN, "w", encoding="utf-8") as f:
         f.write(creds.to_json())
 
@@ -888,12 +915,21 @@ def _gmail_creds():
     from google.auth.exceptions import RefreshError
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
-    if not os.path.exists(GMAIL_TOKEN):
+    token_secret = False
+    if not os.path.exists(GMAIL_TOKEN) and GMAIL_TOKEN_JSON:
+        try:
+            info = json.loads(GMAIL_TOKEN_JSON)
+        except (TypeError, json.JSONDecodeError):
+            return None
+        token_secret = True
+    elif not os.path.exists(GMAIL_TOKEN):
         return None
     try:
-        creds = Credentials.from_authorized_user_file(GMAIL_TOKEN, GMAIL_SCOPES)
+        creds = (Credentials.from_authorized_user_info(info, GMAIL_SCOPES) if token_secret
+                 else Credentials.from_authorized_user_file(GMAIL_TOKEN, GMAIL_SCOPES))
     except Exception:
-        os.remove(GMAIL_TOKEN)
+        if not token_secret:
+            os.remove(GMAIL_TOKEN)
         return None
     if creds.valid:
         return creds
@@ -901,11 +937,13 @@ def _gmail_creds():
         try:
             creds.refresh(Request())
         except RefreshError:  # autorisation expirée (mode « Test » : 7 jours) ou révoquée
-            os.remove(GMAIL_TOKEN)
+            if not token_secret:
+                os.remove(GMAIL_TOKEN)
             return None
         _sauver_token(creds)  
         return creds
-    os.remove(GMAIL_TOKEN)
+    if not token_secret:
+        os.remove(GMAIL_TOKEN)
     return None
 
 
@@ -953,8 +991,8 @@ def _erreur_http_gmail(e):
 
 def envoyer_email_candidature(destinataire, sujet, corps, expediteur, fichier_cv=None, fichier_lettre=None):
     """Envoie le message (avec CV et lettre en pièces jointes) via l'API Gmail. Retourne (ok, message)."""
-    if not destinataire or "@" not in destinataire:
-        return False, "Adresse du recruteur invalide."
+    if not adresse_email_valide(destinataire):
+        return False, "Saisissez une adresse e-mail de recruteur valide avant l'envoi."
     msg, taille = _message_mime(destinataire, sujet, corps, expediteur, (fichier_cv, fichier_lettre))
     if taille > TAILLE_MAX_PJ:
         return False, "Les pièces jointes dépassent 18 Mo : Gmail refusera le message. Réduisez la taille des PDF."
@@ -969,6 +1007,9 @@ def envoyer_email_candidature(destinataire, sujet, corps, expediteur, fichier_cv
     try:
         creds = _gmail_creds()
         if creds is None:
+            if GMAIL_TOKEN_JSON:
+                return False, ("Le jeton Gmail des Secrets Streamlit est expiré ou invalide. Réautorisez Gmail en local, "
+                               "puis remplacez GMAIL_TOKEN_JSON par le nouveau token.json.")
             try:
                 creds = autoriser_gmail()
             except Exception as e:

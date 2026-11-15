@@ -91,6 +91,11 @@ def charger_offres():
             rang = df.groupby("place_id").cumcount()
             doublon = df["place_id"].duplicated(keep=False)
             df.loc[doublon, "place_id"] = df.loc[doublon, "place_id"] + "_" + rang[doublon].astype(str)
+            # Anciennes collectes pouvaient fabriquer recrutement@domaine.ma.
+            # Effacer ces valeurs si elles n'ont jamais été trouvées sur un site.
+            non_verifie = ~df["email_verifie"].astype(str).str.casefold().isin(("true", "1", "yes", "vrai"))
+            faux_email = df["email_contact"].astype(str).str.casefold().str.startswith("recrutement@")
+            df.loc[non_verifie & faux_email, ["email_contact", "email_verifie"]] = ["", False]
             df = df.reset_index(drop=True)
             df["latitude"] = pd.to_numeric(df["latitude"], errors="coerce").fillna(31.6295)
             df["longitude"] = pd.to_numeric(df["longitude"], errors="coerce").fillna(-7.9811)
@@ -376,6 +381,10 @@ def panneau_collecte():
             comptes = offres_collectees["source"].value_counts().to_dict()
             bilan = f"Collecte terminée. Entreprises repérées sur Maps : {entreprises_n}. Offres de stage pertinentes : "
             bilan += " · ".join(f"{s}: {n}" for s, n in comptes.items()) if comptes else "aucune trouvée"
+            emails_publics = int((res["source"].astype(str).str.casefold().eq("google places")
+                                  & res["email_contact"].astype(str).str.contains("@", regex=False)
+                                  & res["email_verifie"].astype(str).str.casefold().isin(("true", "1", "yes", "vrai"))).sum())
+            bilan += f"\nE-mails publics trouvés sur les sites d'entreprise : {emails_publics}/{entreprises_n}. Les sites d'offres ne publient pas toujours l'adresse du recruteur."
             for src, cle in (("PostulerCV", "postulercv"), ("Stagiaires.ma", "stagiaires.ma"),
                              ("Jawb", "jawb"), ("LinkedIn", "linkedin")):
                 if src not in comptes:
@@ -522,7 +531,7 @@ elif tab == T_CARTE:
                 <div style="color:#78716c;font-size:13px;margin-bottom:10px">📍 {e(sel['adresse'])}</div>
                 <div class="mini" style="margin-bottom:10px;color:#57534e">{e(sel['description'])}</div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-                  <div class="mini hl"><span class="lbl">Email RH</span><br><b style="color:var(--brand)">{e(sel['email_contact'])}</b></div>
+                  <div class="mini hl"><span class="lbl">E-mail public</span><br><b style="color:var(--brand)">{e(sel['email_contact'] or 'Non trouvé sur le site public')}</b></div>
                   <div class="mini"><span class="lbl">Téléphone</span><br><b>{e(sel.get('telephone', ''))}</b></div>
                   <div class="mini"><span class="lbl">Site web</span><br><b style="color:var(--brand)">{e(str(sel.get('site_web', '')).replace('https://', ''))}</b></div>
                   <div class="mini"><span class="lbl">Effectif</span><br><b>{e(sel.get('effectif', 'N/C'))}</b></div></div>
@@ -707,13 +716,19 @@ elif tab == T_EMAIL:
                 st.stop()
             pid = x.selectbox("Sélectionnez l'offre de stage visée :", list(OFFRE_PAR_ID), format_func=libelle_offre, key="em_offre")
             o = OFFRE_PAR_ID[pid]
-            cib = dict(nom=o["nom"], poste=o["titre_offre"], dest=o.get("email_contact", ""), comp=o["competences"],
-                       desc=o.get("description", ""), spont=False, type="Offre de stage", ok=bool(o.get("email_verifie", False)))
+            adresse = str(o.get("email_contact", "") or "").strip()
+            email_public = str(o.get("email_verifie", "")).casefold() in ("true", "1", "yes", "vrai")
+            cib = dict(nom=o["nom"], poste=o["titre_offre"], dest=adresse, comp=o["competences"],
+                       desc=o.get("description", ""), spont=False, type="Offre de stage", ok=email_public,
+                       source=o.get("site_web", ""))
         else:
             nom = x.selectbox("Sélectionnez l'entreprise IT :", list(ENT_PAR_NOM), key="em_ent")
             en = ENT_PAR_NOM[nom]
-            cib = dict(nom=nom, poste="Stage Data / IA (spontanée)", dest=en["email_contact"], comp=en["technologies"],
-                       desc=en["description"], spont=True, type="Candidature spontanée", ok=bool(en.get("email_verifie", False)))
+            adresse = str(en.get("email_contact", "") or "").strip()
+            email_public = str(en.get("email_verifie", "")).casefold() in ("true", "1", "yes", "vrai")
+            cib = dict(nom=nom, poste="Stage Data / IA (spontanée)", dest=adresse, comp=en["technologies"],
+                       desc=en["description"], spont=True, type="Candidature spontanée", ok=email_public,
+                       source=en.get("site_web", ""))
         y.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
         if y.button("✨ Générer mon Email Personnalisé", type="primary", use_container_width=True):
             for k in ("em_suj", "em_corps", "em_dest", "em_cible"):
@@ -729,6 +744,15 @@ elif tab == T_EMAIL:
                     st.session_state.em_generation_error = str(exc)
     if st.session_state.get("em_generation_error"):
         afficher_message("E-mail non généré : " + st.session_state.em_generation_error, "error")
+    etat_gm, msg_gm = backend.gmail_statut()
+    afficher_message(msg_gm, "success" if etat_gm == "pret" else "warning" if etat_gm == "credentials_manquant" else "info")
+    if etat_gm == "a_autoriser" and st.button("🔐 Connecter Gmail", key="connect_gmail"):
+        try:
+            backend.autoriser_gmail()
+            afficher_message("Gmail autorisé sur cet ordinateur. Pour Streamlit Cloud, copiez le contenu de token.json dans ses Secrets sous GMAIL_TOKEN_JSON.", "success")
+            st.rerun()
+        except Exception as exc:
+            afficher_message(f"Connexion Gmail non terminée : {str(exc)[:180]}", "error")
     if "em_corps" not in st.session_state:
         st.markdown('<div class="kpi empty"><div style="font-size:34px">✉️</div><h4>Prêt à rédiger votre email de candidature</h4>'
                     'Cliquez sur « Générer mon Email Personnalisé » pour concevoir un email sur-mesure adapté aux besoins de l\'entreprise.</div>',
@@ -737,17 +761,23 @@ elif tab == T_EMAIL:
         c = st.session_state.em_cible
         with st.container(border=True):
             st.markdown(f"**Brouillon pour {e(c['nom'])}** · {e(c['type'])}")
-            if not c["ok"]:
-                afficher_message("Cette adresse e-mail n'a pas été vérifiée (donnée de démonstration ou estimée). Contrôlez-la avant d'envoyer.", "warning")
+            if not st.session_state.get("em_dest", "").strip():
+                afficher_message("Aucune adresse e-mail de contact n'a été trouvée pour cette cible. Ouvrez l'annonce ou le site source pour chercher un contact, puis saisissez son adresse ici.", "warning")
+            elif not c["ok"]:
+                afficher_message("Cette adresse a été saisie ou provient d'une ancienne collecte et n'a pas été confirmée sur le site de l'entreprise. Vérifiez-la avant l'envoi.", "warning")
+            elif c["ok"]:
+                afficher_message("Adresse publique trouvée sur le site de l'entreprise. Vérifiez qu'elle convient aux candidatures.", "info")
             st.text_input("Destinataire", key="em_dest")
+            if str(c.get("source", "")).startswith("http"):
+                st.link_button("🔗 Ouvrir l'annonce ou le site source", c["source"])
             st.text_input("Sujet", key="em_suj")
             st.text_area("Message (modifiable)", key="em_corps", height=280)
             pj = pieces_jointes()
             st.caption("📎 Pièces jointes : " + (", ".join(pj) if pj else "aucune (importez votre CV et votre lettre dans « Mon CV & Lettre »)"))
-            etat_gm, msg_gm = backend.gmail_statut()
-            afficher_message(msg_gm, "success" if etat_gm == "pret" else "warning" if etat_gm == "credentials_manquant" else "info")
             s1, s2 = st.columns(2)
-            if s1.button("📨 Envoyer l'e-mail (API Gmail)", type="primary", use_container_width=True):
+            adresse_valide = backend.adresse_email_valide(st.session_state.get("em_dest", ""))
+            if s1.button("📨 Envoyer l'e-mail (API Gmail)", type="primary", use_container_width=True,
+                         disabled=not adresse_valide):
                 with st.spinner("Envoi par l'API Gmail… (la première fois, une page Google s'ouvre pour l'autorisation)"):
                     ok, msg = backend.envoyer_email_candidature(st.session_state.em_dest, st.session_state.em_suj,
                                                                 st.session_state.em_corps, profil["email"], CV_PATH, LETTRE_PATH)
