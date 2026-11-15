@@ -413,16 +413,21 @@ def collecter_jawb(ville="Marrakech"):
     modele_vide = {"domaine": "Informatique", "remuneration": "Non précisée", "duree": "Non précisée",
                    "description": "", "competences": "", "missions": "", "profil": ""}
     ns = {"content": "http://purl.org/rss/1.0/modules/content/"}
-    for metier in ("data", "intelligence artificielle", "informatique"):
+    # Le flux accepte des filtres métier, mais ils peuvent éliminer des annonces
+    # dont les catégories ne sont pas renseignées. Toujours lire aussi le flux ville.
+    for metier in (None, "data", "intelligence artificielle", "informatique"):
         try:
-            res = requests.get(url, params={"ville": ville, "metier": metier},
+            params = {"ville": ville}
+            if metier:
+                params["metier"] = metier
+            res = requests.get(url, params=params,
                                headers={"User-Agent": "MarrakechStage/1.0 (lecteur RSS)"}, timeout=15)
             if res.status_code != 200:
-                erreurs.append(f"HTTP {res.status_code} pour {metier}")
+                erreurs.append(f"HTTP {res.status_code}" + (f" pour {metier}" if metier else ""))
                 continue
             root = ET.fromstring(res.content)
         except Exception as exc:
-            erreurs.append(f"{metier}: {str(exc)[:90]}")
+            erreurs.append(f"{metier or 'flux général'}: {str(exc)[:90]}")
             continue
 
         for item in root.findall(".//item"):
@@ -476,7 +481,9 @@ def offre_pertinente(titre, description="", competences=""):
     titre_normalise = _texte_normalise(titre)
     texte = _texte_normalise(f"{titre} {description} {competences}")
     domaine_ia = bool(re.search(r"(?<!\w)(?:ia|ai)(?!\w)", texte))
-    return (any(mot in titre_normalise for mot in MOTS_STAGE_OFFRE)
+    stage = any(mot in titre_normalise for mot in MOTS_STAGE_OFFRE) or any(
+        mot in _texte_normalise(description) for mot in MOTS_STAGE_OFFRE)
+    return (stage
             and (domaine_ia or any(mot in texte for mot in MOTS_DOMAINE_OFFRE)))
 
 
@@ -544,7 +551,10 @@ def collecter_stagiaires_ma(ville="Marrakech"):
     offres, vus = [], set()
     modele = {"domaine": "Data / IA", "remuneration": "Non précisée", "duree": "Non précisée",
               "description": "", "competences": "", "missions": "", "profil": ""}
-    for lien_offre in soup.find_all("a", href=re.compile(r"/stage-emploi-maroc/")):
+    liens = soup.find_all("a", href=re.compile(r"/stage-emploi-maroc/"))
+    # Certaines pages présentent le titre dans le lien, d'autres dans un titre
+    # voisin ou uniquement dans les données structurées de la carte.
+    for lien_offre in liens:
         href = urllib.parse.urljoin(url, lien_offre.get("href", "")).split("?")[0]
         if not href or href in vus:
             continue
@@ -563,16 +573,22 @@ def collecter_stagiaires_ma(ville="Marrakech"):
         titre = (titre_el.get_text(" ", strip=True) if titre_el else "")
         if not titre and image:
             titre = image.get("alt", "").strip()
+        texte_bloc = bloc.get_text(" ", strip=True)
         if not titre:
             titre = lien_offre.get_text(" ", strip=True)
-        if not offre_pertinente(titre):
-            continue
+        if not offre_pertinente(titre, texte_bloc):
+            # Accepter aussi les cartes où le titre du poste est séparé du lien,
+            # sans relâcher les critères de stage et de domaine.
+            candidats = bloc.find_all(["h2", "h3", "h4", "a"])
+            titre = next((c.get_text(" ", strip=True) for c in candidats
+                          if offre_pertinente(c.get_text(" ", strip=True), texte_bloc)), titre)
+            if not offre_pertinente(titre, texte_bloc):
+                continue
 
         liens_bloc = bloc.find_all("a", href=True)
         employeur = next((a.get_text(" ", strip=True) for a in liens_bloc
                           if a is not lien_offre and re.search(r"/entreprise/|/companies/", a["href"], re.I)
                           and a.get_text(" ", strip=True)), "Entreprise (voir l'annonce)")
-        texte_bloc = bloc.get_text(" ", strip=True)
         offre = _ligne(
             f"stagiaires_{abs(hash(href))}", employeur, titre, ville, "", "", False, href,
             "", 0, 31.6295, -7.9811, "Data / IA", "Stagiaires.ma", ville, modele, "Récemment")
@@ -584,6 +600,61 @@ def collecter_stagiaires_ma(ville="Marrakech"):
             "stagiaires.ma",
             "Aucune annonce data/IA de stage trouvée sur la page publique de Marrakech."
         )
+    return pd.DataFrame(offres)
+
+
+def collecter_postulercv(ville="Marrakech"):
+    """Collecte les stages IT publics de PostulerCV, sans compte ni clé API."""
+    url = "https://www.postulercv.ma/emploi/informatique-telecoms-marrakech-stage"
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; MarrakechStage/1.0)"}
+    modele = {"domaine": "Data / IA", "remuneration": "Non précisée", "duree": "Non précisée",
+              "description": "", "competences": "", "missions": "", "profil": ""}
+    try:
+        res = requests.get(url, headers=headers, timeout=18)
+        if res.status_code != 200:
+            DERNIERE_ERREUR["postulercv"] = f"PostulerCV HTTP {res.status_code}"
+            return pd.DataFrame()
+        soup = BeautifulSoup(res.text, "html.parser")
+    except Exception as exc:
+        DERNIERE_ERREUR["postulercv"] = f"Erreur PostulerCV : {str(exc)[:120]}"
+        return pd.DataFrame()
+
+    offres, vus = [], set()
+    for lien in soup.find_all("a", href=re.compile(r"/offres/", re.I)):
+        href = urllib.parse.urljoin(url, lien.get("href", "")).split("?")[0]
+        if not href or href in vus:
+            continue
+        vus.add(href)
+        bloc = lien
+        for _ in range(5):
+            parent = getattr(bloc, "parent", None)
+            if not parent or getattr(parent, "name", None) in ("body", "html"):
+                break
+            bloc = parent
+            if bloc.find(["h2", "h3", "h4"]):
+                break
+        titre_el = lien.find(["h2", "h3", "h4"]) or bloc.find(["h2", "h3", "h4"])
+        titre = titre_el.get_text(" ", strip=True) if titre_el else lien.get_text(" ", strip=True)
+        texte = bloc.get_text(" ", strip=True)
+        # La page catégorie est déjà dédiée aux stages IT à Marrakech. On garde
+        # uniquement les rôles data/IA, même si le terme « stage » est ailleurs.
+        if not offre_pertinente(titre, texte):
+            continue
+        entreprise = "Entreprise (voir l'annonce)"
+        # Le lien peut être situé dans la même carte que le titre.
+        for mot in ("à", "chez", "–", "-"):
+            if mot in titre:
+                morceaux = titre.rsplit(mot, 1)
+                if len(morceaux) == 2 and len(morceaux[1].strip()) > 1:
+                    entreprise = morceaux[1].strip()
+                    break
+        offre = _ligne(
+            f"postulercv_{abs(hash(href))}", entreprise, titre, ville, "", "", False, href,
+            "", 0, 31.6295, -7.9811, "Data / IA", "PostulerCV", ville, modele, "Récemment")
+        offre["description"] = texte[:1200]
+        offres.append(offre)
+    if not offres:
+        DERNIERE_ERREUR["postulercv"] = "Aucune annonce data/IA de stage détectée dans la catégorie IT de Marrakech."
     return pd.DataFrame(offres)
 
 
@@ -637,7 +708,8 @@ def executer_collecte_complete(api_key, queries=DEFAULT_QUERIES, progress=None, 
 
     pool = ThreadPoolExecutor(max_workers=16)
     # Démarrer les collecteurs d'offres avant les tâches d'e-mails pour éviter qu'elles attendent derrière 70+ sites.
-    f_web = [pool.submit(collecter_jawb), pool.submit(collecter_stagiaires_ma), pool.submit(collecter_linkedin)]
+    f_web = [pool.submit(collecter_jawb), pool.submit(collecter_stagiaires_ma),
+             pool.submit(collecter_postulercv), pool.submit(collecter_linkedin)]
     f_emails = {pool.submit(obtenir_email_normalise, p.get("displayName", {}).get("text", ""),
                             p.get("websiteUri", "")): k for k, (_, _, p) in enumerate(uniques)}
     tous = list(f_emails) + f_web
@@ -672,11 +744,12 @@ def executer_collecte_complete(api_key, queries=DEFAULT_QUERIES, progress=None, 
             if not df.empty:
                 dfs.append(df)
     if not dfs:
-        erreurs = [DERNIERE_ERREUR[k] for k in ("linkedin", "jawb", "stagiaires.ma") if DERNIERE_ERREUR.get(k)]
+        erreurs = [DERNIERE_ERREUR[k] for k in ("postulercv", "stagiaires.ma", "jawb", "linkedin")
+                   if DERNIERE_ERREUR.get(k)]
         if erreurs:
             DERNIERE_ERREUR["offres"] = " ; ".join(erreurs)
         else:
-            DERNIERE_ERREUR["offres"] = "Aucune annonce retournée par LinkedIn ou Jawb."
+            DERNIERE_ERREUR["offres"] = "Aucune annonce pertinente retournée par les sources publiques."
         return pd.DataFrame()
     maj(0.95, "Enregistrement...")
     df_propre = nettoyer_donnees(pd.concat(dfs, ignore_index=True))

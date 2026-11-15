@@ -251,7 +251,8 @@ def hero(cle, pill, titre, texte, action=None):
 
 
 def badge_source(s):
-    cls = {"LinkedIn": "b-linkedin", "Indeed": "b-indeed", "Stagiaire.ma": "b-stagiaire"}.get(s, "b-google")
+    cls = {"LinkedIn": "b-linkedin", "Indeed": "b-indeed", "Stagiaires.ma": "b-stagiaire",
+           "Jawb": "b-stagiaire", "PostulerCV": "b-indeed"}.get(s, "b-google")
     return f'<span class="b {cls}">{e(s or "Offre")}</span>'
 
 
@@ -341,7 +342,8 @@ def panneau_collecte():
             comptes = offres_collectees["source"].value_counts().to_dict()
             bilan = f"Collecte terminée. Entreprises repérées sur Maps : {entreprises_n}. Offres de stage pertinentes : "
             bilan += " · ".join(f"{s}: {n}" for s, n in comptes.items()) if comptes else "aucune trouvée"
-            for src, cle in (("Stagiaires.ma", "stagiaires.ma"), ("Jawb", "jawb"), ("LinkedIn", "linkedin")):
+            for src, cle in (("PostulerCV", "postulercv"), ("Stagiaires.ma", "stagiaires.ma"),
+                             ("Jawb", "jawb"), ("LinkedIn", "linkedin")):
                 if src not in comptes:
                     msg = backend.DERNIERE_ERREUR.get(cle, "Aucun résultat retourné.")
                     bilan += f"\n{src} : 0 — {msg}"
@@ -386,7 +388,7 @@ if tab == T_OFFRES:
         mot = s1.text_input("Recherche", placeholder="🔍  Rechercher par titre, compétence (Python, SQL, Power BI, DAX...), entreprise...  puis appuyez sur Entrée",
                             label_visibility="collapsed")
         sources_disponibles = sorted(OFFRES["source"].dropna().astype(str).unique().tolist())
-        sources_filtre = ["Stagiaires.ma", "Jawb", "LinkedIn"]
+        sources_filtre = ["PostulerCV", "Stagiaires.ma", "Jawb", "LinkedIn"]
         choix_sources = ["Toutes"] + list(dict.fromkeys(sources_filtre + sources_disponibles))
         source = s2.radio("Source", choix_sources, horizontal=True, label_visibility="collapsed")
         f1, f2, f3 = st.columns(3)
@@ -394,7 +396,7 @@ if tab == T_OFFRES:
         quartier = f2.selectbox("Quartier à Marrakech", ["Tous les quartiers"] + backend.QUARTIERS)
         type_stage = f3.selectbox("Type de stage", ["Tous les types"] + sorted(t for t in OFFRES["type_stage"].unique() if t))
 
-    st.caption("Les annonces sont collectées depuis les pages publiques de Stagiaires.ma et les flux RSS de Jawb ; LinkedIn est une source complémentaire. Google Maps sert uniquement à repérer les entreprises.")
+    st.caption("Les annonces sont collectées depuis les pages publiques de PostulerCV et Stagiaires.ma, le flux RSS de Jawb et, en complément, LinkedIn. Google Maps sert uniquement à repérer les entreprises.")
 
     df = OFFRES.copy()
     if source != "Toutes":
