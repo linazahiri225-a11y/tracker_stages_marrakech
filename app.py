@@ -29,7 +29,6 @@ def e(v):
 
 
 def afficher_message(texte, niveau="info"):
-    """Affiche une alerte lisible sans dépendre des couleurs du thème Streamlit."""
     couleurs = {
         "info": ("#eff6ff", "#bfdbfe", "#1e3a8a"),
         "success": ("#f0fdf4", "#bbf7d0", "#166534"),
@@ -364,25 +363,7 @@ def panneau_collecte():
     """Lance le backend, puis conserve son bilan afin de l'afficher après le rerun Streamlit."""
     ancien_bilan = st.session_state.pop("bilan_collecte", None)
     if ancien_bilan:
-        st.markdown("### 📊 Bilan de la collecte")
-        if ancien_bilan["ok"]:
-            k1, k2, k3 = st.columns(3)
-            k1.metric("Entreprises repérées sur Maps", ancien_bilan["entreprises"])
-            k2.metric("Offres de stage pertinentes", ancien_bilan["offres"])
-            k3.metric("E-mails publics vérifiés", f"{ancien_bilan['emails']}/{ancien_bilan['entreprises']}")
-            st.markdown("**Résultats par source**")
-            sources = ancien_bilan["sources"]
-            for src, cle in (("PostulerCV", "postulercv"), ("Stagiaires.ma", "stagiaires.ma"),
-                             ("Jawb", "jawb"), ("LinkedIn", "linkedin")):
-                nombre = sources.get(src, 0)
-                if nombre:
-                    st.markdown(f"- **{e(src)} : {nombre} offre(s)**")
-                else:
-                    raison = ancien_bilan["erreurs"].get(cle, "Aucun résultat retourné.")
-                    st.markdown(f"- **{e(src)} : 0 offre** — {e(raison)}")
-            st.caption("Les e-mails comptabilisés sont ceux trouvés et vérifiés sur les sites des entreprises. Les sites d’offres ne publient pas toujours l’adresse du recruteur.")
-        else:
-            afficher_message("Aucun résultat. " + ancien_bilan["details"], "warning")
+        afficher_message(ancien_bilan, "warning")
     if st.button("🔄 Lancer la collecte", type="primary", key="btn_collecte"):
         if not backend.GOOGLE_MAPS_API_KEY:
             afficher_message("Google Maps n'est pas configuré : la collecte va quand même chercher les offres publiques de stage.")
@@ -391,20 +372,24 @@ def panneau_collecte():
         barre.empty()
         if res.empty:
             details = backend.DERNIERE_ERREUR.get("offres") or backend.DERNIERE_ERREUR.get("google") or "Aucune annonce réelle trouvée."
-            st.session_state.bilan_collecte = {"ok": False, "details": details}
+            st.session_state.bilan_collecte = "Aucun résultat. " + details
             st.rerun()
         else:
             entreprises_n = int((res["source"].astype(str).str.casefold() == "google places").sum())
             offres_collectees = res[res["source"].astype(str).str.casefold() != "google places"]
             comptes = offres_collectees["source"].value_counts().to_dict()
+            bilan = f"Collecte terminée. Entreprises repérées sur Maps : {entreprises_n}. Offres de stage pertinentes : "
+            bilan += " · ".join(f"{s}: {n}" for s, n in comptes.items()) if comptes else "aucune trouvée"
             emails_publics = int((res["source"].astype(str).str.casefold().eq("google places")
                                   & res["email_contact"].astype(str).str.contains("@", regex=False)
                                   & res["email_verifie"].astype(str).str.casefold().isin(("true", "1", "yes", "vrai"))).sum())
-            erreurs = {cle: backend.DERNIERE_ERREUR.get(cle, "Aucun résultat retourné.")
-                       for cle in ("postulercv", "stagiaires.ma", "jawb", "linkedin")}
-            st.session_state.bilan_collecte = {"ok": True, "entreprises": entreprises_n,
-                                               "offres": len(offres_collectees), "emails": emails_publics,
-                                               "sources": comptes, "erreurs": erreurs}
+            bilan += f"\nE-mails publics trouvés sur les sites d'entreprise : {emails_publics}/{entreprises_n}. Les sites d'offres ne publient pas toujours l'adresse du recruteur."
+            for src, cle in (("PostulerCV", "postulercv"), ("Stagiaires.ma", "stagiaires.ma"),
+                             ("Jawb", "jawb"), ("LinkedIn", "linkedin")):
+                if src not in comptes:
+                    msg = backend.DERNIERE_ERREUR.get(cle, "Aucun résultat retourné.")
+                    bilan += f"\n{src} : 0 — {msg}"
+            st.session_state.bilan_collecte = bilan
             st.rerun()
 
 
