@@ -884,12 +884,12 @@ TAILLE_MAX_PJ = 18 * 1024 * 1024  # limite Gmail 25 Mo, base64 compris
 def gmail_statut():
     """Retourne (état, message) : 'pret', 'a_autoriser' ou 'credentials_manquant'."""
     if os.path.exists(GMAIL_TOKEN):
-        return "pret", "✅ Gmail autorisé : l'envoi se fait par l'API Gmail (HTTPS), depuis votre adresse."
+        return "pret", "Gmail autorisé : l'envoi se fait par l'API Gmail (HTTPS), depuis votre adresse."
     if GMAIL_TOKEN_JSON:
         try:
             info = json.loads(GMAIL_TOKEN_JSON)
             if isinstance(info, dict) and info.get("refresh_token") and info.get("client_id"):
-                return "pret", "✅ Jeton Gmail chargé depuis les Secrets Streamlit."
+                return "pret", "Jeton Gmail chargé depuis les Secrets Streamlit."
         except (TypeError, json.JSONDecodeError):
             return "credentials_manquant", "Le secret GMAIL_TOKEN_JSON est invalide : collez le contenu JSON complet de token.json."
         return "credentials_manquant", "Le secret GMAIL_TOKEN_JSON est incomplet : il doit contenir un refresh_token OAuth Gmail."

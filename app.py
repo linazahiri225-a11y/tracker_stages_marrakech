@@ -12,7 +12,29 @@ from streamlit_folium import st_folium
 
 import backend
 
-st.set_page_config(page_title="MarrakechStage - Hub Stages & Entreprises IT", page_icon="🧭", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="MarrakechStage - Hub Stages & Entreprises IT", page_icon="app_icon.svg", layout="wide", initial_sidebar_state="collapsed")
+
+ICON = {
+    "send": ":material/send:", "language": ":material/language:", "mail": ":material/mail:",
+    "refresh": ":material/refresh:", "auto": ":material/auto_awesome:", "person": ":material/person:",
+    "description": ":material/description:", "school": ":material/school:", "download": ":material/download:",
+    "lock": ":material/lock:", "link": ":material/link:", "inbox": ":material/forward_to_inbox:",
+    "save": ":material/save:", "visibility": ":material/visibility:", "delete": ":material/delete:",
+}
+
+
+def svg_icon(name, size=18):
+    """Icône SVG monochrome pour les contenus HTML personnalisés."""
+    paths = {
+        "pin": '<path d="M12 21s7-5.2 7-12a7 7 0 1 0-14 0c0 6.8 7 12 7 12Z"/><circle cx="12" cy="9" r="2.3"/>',
+        "calendar": '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
+        "idea": '<path d="M9 18h6m-5 4h4m-2-21a7 7 0 0 0-4 12.7c.6.4 1 1 1 1.8h6c0-.8.4-1.4 1-1.8A7 7 0 0 0 12 1Z"/>',
+        "map": '<path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15m6-12v15"/>',
+        "chart": '<path d="M4 19V5m0 14h17M8 15l3-4 3 2 5-7"/>',
+        "search": '<circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/>',
+        "folder": '<path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+    }
+    return f'<svg aria-hidden="true" width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.2em">{paths[name]}</svg>'
 
 CV_PATH, LETTRE_PATH = "mon_cv.pdf", "ma_lettre_motivation.pdf"
 T_OFFRES, T_CARTE, T_CV, T_ANALYSE, T_EMAIL, T_SUIVI = (
@@ -326,7 +348,7 @@ def dialogue_offre(o):
     st.markdown(f'{badge_source(o.get("source"))} <span class="b-type" style="margin-left:6px">{e(o.get("quartier", ""))}</span>',
                 unsafe_allow_html=True)
     st.markdown(f"## {o['titre_offre']}")
-    st.markdown(f"**{o['nom']}** · 📍 {o.get('adresse', '')}")
+    st.markdown(f"**{o['nom']}** · {svg_icon('pin')} {o.get('adresse', '')}", unsafe_allow_html=True)
     st.markdown(f"""<div class="mini hl" style="display:flex;gap:30px;flex-wrap:wrap">
       <div><span class="lbl">Rémunération</span><br><b style="color:#15803d">{e(o.get('remuneration', ''))}</b></div>
       <div><span class="lbl">Durée</span><br><b>{e(o.get('duree', ''))}</b></div>
@@ -341,16 +363,16 @@ def dialogue_offre(o):
                 st.markdown(f"• {ligne.strip()}")
     st.markdown(tags(o.get("competences", "")), unsafe_allow_html=True)
     c1, c2 = st.columns(2)
-    c1.button("✈️ Préparer l'email IA", type="primary", use_container_width=True, key=f"dlg_em_{o['place_id']}",
+    c1.button("Préparer l'email IA", icon=ICON["send"], type="primary", use_container_width=True, key=f"dlg_em_{o['place_id']}",
               on_click=goto, args=(T_EMAIL,), kwargs={"em_mode": E_OFFRE, "em_offre": o["place_id"]})
     if str(o.get("site_web", "")).startswith("http"):
-        c2.link_button("🌐 Voir l'annonce originale", o["site_web"], use_container_width=True)
+        c2.link_button("Voir l'annonce originale", o["site_web"], icon=ICON["language"], use_container_width=True)
 
 
 @st.dialog("Détail de la candidature")
 def dialogue_suivi(r):
     st.markdown(f"### {r['titre']}\n**{r['nom']}** · {r['type']} · {fr_date(r['date'])}")
-    st.write(f"✉️ {r['email']}")
+    st.markdown(f"{svg_icon('mail')} {e(r['email'])}", unsafe_allow_html=True)
     st.write(f"Statut : **{r['statut']}**")
     if r["notes"]:
         st.write(r["notes"])
@@ -364,7 +386,7 @@ def panneau_collecte():
     ancien_bilan = st.session_state.pop("bilan_collecte", None)
     if ancien_bilan:
         afficher_message(ancien_bilan, "warning")
-    if st.button("🔄 Lancer la collecte", type="primary", key="btn_collecte"):
+    if st.button("Lancer la collecte", icon=ICON["refresh"], type="primary", key="btn_collecte"):
         if not backend.GOOGLE_MAPS_API_KEY:
             afficher_message("Google Maps n'est pas configuré : la collecte va quand même chercher les offres publiques de stage.")
         barre = st.progress(0.0, text="Démarrage de la collecte...")
@@ -396,7 +418,7 @@ def panneau_collecte():
 # ==========================================
 # EN-TÊTE + NAVIGATION
 # ==========================================
-st.markdown('<div style="display:flex;gap:12px;align-items:center;margin-bottom:14px"><div class="logo">🧭</div><div>'
+st.markdown(f'<div style="display:flex;gap:12px;align-items:center;margin-bottom:14px"><div class="logo">{svg_icon("map", 23)}</div><div>'
             '<div class="brand">Marrakech<span>Stage</span> <span class="b-type" style="font-size:10px;padding:2px 8px">IT & IA</span></div>'
             '<div style="font-size:13px;color:#78736d">Hub Stages & Entreprises IT à Marrakech</div></div></div>', unsafe_allow_html=True)
 
@@ -414,7 +436,7 @@ tab = st.session_state.tab
 
 # Aucune donnée collectée : on propose uniquement la collecte (les onglets CV et Suivi restent utilisables)
 if DONNEES.empty and tab in (T_OFFRES, T_CARTE, T_ANALYSE, T_EMAIL):
-    hero("vide", "🔄 Première utilisation", "Aucune offre pour le moment",
+    hero("vide", f"{svg_icon('refresh')} Première utilisation", "Aucune offre pour le moment",
          "Cliquez sur « Lancer la collecte » pour récupérer les entreprises IT de Marrakech (Google Maps), "
          "les e-mails RH et les offres de stage. La collecte prend environ une à deux minutes.")
     panneau_collecte()
@@ -424,13 +446,13 @@ if DONNEES.empty and tab in (T_OFFRES, T_CARTE, T_ANALYSE, T_EMAIL):
 # 1. OFFRES
 # ==========================================
 if tab == T_OFFRES:
-    hero("offres", "✨ Agrégateur Marrakech • Data, IA & IT", "Trouvez votre stage Data, IA ou informatique à Marrakech",
+    hero("offres", f"{svg_icon('chart')} Agrégateur Marrakech • Data, IA & IT", "Trouvez votre stage Data, IA ou informatique à Marrakech",
          "Les annonces réelles collectées depuis les sources configurées. Les entreprises trouvées sur Google Maps "
          "sont affichées dans l'onglet Carte, séparément des offres. Générez vos candidatures avec l'IA.")
     panneau_collecte()
     with st.container(border=True):
         s1, s2 = st.columns([4, 2.2])
-        mot = s1.text_input("Recherche", placeholder="🔍  Rechercher par titre, compétence (Python, SQL, Power BI, DAX...), entreprise...  puis appuyez sur Entrée",
+        mot = s1.text_input("Recherche", placeholder="Rechercher par titre, compétence (Python, SQL, Power BI, DAX...), entreprise... puis appuyez sur Entrée",
                             label_visibility="collapsed")
         sources_disponibles = sorted(OFFRES["source"].dropna().astype(str).unique().tolist())
         sources_filtre = ["PostulerCV", "Stagiaires.ma", "Jawb", "LinkedIn"]
@@ -469,14 +491,14 @@ if tab == T_OFFRES:
             <div>{badge_source(o['source'])} <span class="b-type" style="margin-left:4px">{e(o['type_stage'])}</span>
               <span style="color:#a8a29e;font-size:13px;margin-left:6px">• {e(o.get('date_publication', ''))}</span></div>
             <h3 style="margin:10px 0 6px;font-size:20px;font-weight:700;color:#1c1917">{e(o['titre_offre'])}</h3>
-            <div style="font-size:14px;color:#57534e;margin-bottom:10px"><b>{e(o['nom'])}</b> &nbsp; 📍 {e(o.get('quartier', ''))}, Marrakech
-              &nbsp; 📅 {e(o.get('duree', ''))} &nbsp; <span class="sal">$ {e(o.get('remuneration', ''))}</span></div>
+            <div style="font-size:14px;color:#57534e;margin-bottom:10px"><b>{e(o['nom'])}</b> &nbsp; {svg_icon('pin', 15)} {e(o.get('quartier', ''))}, Marrakech
+              &nbsp; {svg_icon('calendar', 15)} {e(o.get('duree', ''))} &nbsp; <span class="sal">$ {e(o.get('remuneration', ''))}</span></div>
             <p style="color:#57534e;font-size:14px;line-height:1.55;margin-bottom:12px">{e(o.get('description', ''))}</p>
             <div>{tags(o.get('competences', ''))}</div>""", unsafe_allow_html=True)
             pid = o["place_id"]
-            d.button("✈️ Préparer l'Email IA", key=f"em_{pid}", type="primary", use_container_width=True,
+            d.button("Préparer l'Email IA", icon=ICON["send"], key=f"em_{pid}", type="primary", use_container_width=True,
                      on_click=goto, args=(T_EMAIL,), kwargs={"em_mode": E_OFFRE, "em_offre": pid})
-            d.button("✨ Tester le Match IA", key=f"mt_{pid}", use_container_width=True,
+            d.button("Tester le Match IA", icon=ICON["auto"], key=f"mt_{pid}", use_container_width=True,
                      on_click=goto, args=(T_ANALYSE,), kwargs={"an_mode": M_OFFRE, "an_offre": pid, "an_run": True})
             if d.button("ⓘ Voir détails complets", key=f"dt_{pid}", type="tertiary", use_container_width=True):
                 dialogue_offre(o)
@@ -485,12 +507,12 @@ if tab == T_OFFRES:
 # 2. CARTE & ENTREPRISES
 # ==========================================
 elif tab == T_CARTE:
-    hero("carte", "📍 Collecteur & Cartographie Google Maps • Marrakech", "Entreprises IT & Laboratoires IA à Marrakech",
+    hero("carte", f"{svg_icon('pin')} Collecteur & Cartographie Google Maps • Marrakech", "Entreprises IT & Laboratoires IA à Marrakech",
          "Localisez toutes les structures tech basées à Marrakech (Guéliz, Hivernage, Sidi Ghanem). Obtenez l'email direct "
          "du recruteur et postulez instantanément en candidature spontanée avec l'IA.")
     with st.container(border=True):
         a, b, c = st.columns([3, 1, 1])
-        q = a.text_input("Recherche", placeholder="🔍  Rechercher par nom, tech (Python, Power BI...), quartier...  puis appuyez sur Entrée", label_visibility="collapsed", key="ent_q")
+        q = a.text_input("Recherche", placeholder="Rechercher par nom, technologie ou quartier...", label_visibility="collapsed", key="ent_q")
         qt = b.selectbox("Quartier", ["Tous les quartiers"] + backend.QUARTIERS, label_visibility="collapsed")
         sect = c.selectbox("Secteur", ["Toutes"] + sorted(ENTS["secteur"].astype(str).unique()), label_visibility="collapsed")
     E = ENTS.copy()
@@ -505,9 +527,10 @@ elif tab == T_CARTE:
         st.session_state.ent_sel = noms[0] if noms else None
 
     gauche, droite = st.columns([1.15, 1])
+    
     with gauche:
         with st.container(border=True):
-            st.markdown(f"**🗺️ Carte interactive de Marrakech** ({len(E)} répertoriées) — _cliquez sur un marqueur_")
+            st.markdown(f"{svg_icon('map')} **Carte interactive de Marrakech** ({len(E)} répertoriées) — _cliquez sur un marqueur_", unsafe_allow_html=True)
             fm = folium.Map(location=[31.6420, -8.0050], zoom_start=12, tiles="OpenStreetMap")
             for _, r in E.iterrows():
                 try:
@@ -530,7 +553,7 @@ elif tab == T_CARTE:
                 st.markdown(f"""
                 <span class="b-type">{e(sel['secteur'])}</span>
                 <h3 style="margin:8px 0 2px;font-weight:800">{e(sel['nom'])}</h3>
-                <div style="color:#78716c;font-size:13px;margin-bottom:10px">📍 {e(sel['adresse'])}</div>
+                <div style="color:#78716c;font-size:13px;margin-bottom:10px">{svg_icon('pin')} {e(sel['adresse'])}</div>
                 <div class="mini" style="margin-bottom:10px;color:#57534e">{e(sel['description'])}</div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
                   <div class="mini hl"><span class="lbl">E-mail public</span><br><b style="color:var(--brand)">{e(sel['email_contact'] or 'Non trouvé sur le site public')}</b></div>
@@ -539,12 +562,12 @@ elif tab == T_CARTE:
                   <div class="mini"><span class="lbl">Effectif</span><br><b>{e(sel.get('effectif', 'N/C'))}</b></div></div>
                 <div style="font-size:13px;font-weight:600;margin-bottom:6px">Technologies & Outils Data / IA :</div>
                 <div>{tags(sel.get('technologies', ''))}</div>
-                <div class="opp" style="margin-top:6px"><b>💡 Opportunité IA / Data Analyst :</b><br>{e(sel.get('opportunite', ''))}</div>""",
+                <div class="opp" style="margin-top:6px"><b>{svg_icon('idea')} Opportunité IA / Data Analyst :</b><br>{e(sel.get('opportunite', ''))}</div>""",
                             unsafe_allow_html=True)
                 x, y = st.columns([2, 1])
-                x.button("✈️ Postuler avec Email Personnalisé IA", type="primary", use_container_width=True, key="ent_post",
+                x.button("Postuler avec Email Personnalisé IA", icon=ICON["send"], type="primary", use_container_width=True, key="ent_post",
                          on_click=goto, args=(T_EMAIL,), kwargs={"em_mode": E_SPONT, "em_ent": sel["nom"]})
-                y.button("✨ Matcher mon CV", use_container_width=True, key="ent_match",
+                y.button("Matcher mon CV", icon=ICON["auto"], use_container_width=True, key="ent_match",
                          on_click=goto, args=(T_ANALYSE,), kwargs={"an_mode": M_ENT, "an_ent": sel["nom"], "an_run": True})
         with st.container(border=True):
             st.markdown(f"**ANNUAIRE RAPIDE MARRAKECH ({len(E)})**")
@@ -559,10 +582,10 @@ elif tab == T_CARTE:
 # 3. CV & LETTRE
 # ==========================================
 elif tab == T_CV:
-    hero("cv", "👤 Candidat Data & IA • Marrakech", "Mon Profil, CV & Lettre de Motivation",
+    hero("cv", f"{svg_icon('person')} Candidat Data & IA • Marrakech", "Mon Profil, CV & Lettre de Motivation",
          "Personnalisez vos compétences en IA et Data Analytics. L'IA adaptera automatiquement votre CV et lettre pour "
-         "chaque entreprise ou offre à Marrakech.", action=("🔄 Charger profil type Marrakech", charger_profil_type, ()))
-    t1, t2, t3 = st.tabs(["📄 Mon CV & Résumé Technique", "🏅 Lettre de Motivation", "🎓 Coordonnées & Études"])
+         "chaque entreprise ou offre à Marrakech.", action=("Charger profil type Marrakech", charger_profil_type, ()))
+    t1, t2, t3 = st.tabs(["Mon CV & Résumé Technique", "Lettre de Motivation", "Coordonnées & Études"])
     with t1:
         cg, cd = st.columns([2.1, 1])
         with cg, st.container(border=True):
@@ -580,8 +603,8 @@ elif tab == T_CV:
                 afficher_message("CV enregistré (il sera joint à vos e-mails).", "success")
             st.text_area("CV", value=profil["cv_text"], height=330, key="cv_text", label_visibility="collapsed", on_change=sauver_profil)
             b1, b2, b3 = st.columns([1.2, 1, 1.5])
-            b1.download_button("⬇️ Télécharger mon CV (.txt)", st.session_state.get("cv_text", profil["cv_text"]), "mon_cv.txt", use_container_width=True)
-            if b3.button("✨ Analyser mon CV avec l'IA", type="primary", use_container_width=True):
+            b1.download_button("Télécharger mon CV (.txt)", st.session_state.get("cv_text", profil["cv_text"]), "mon_cv.txt", icon=ICON["download"], use_container_width=True)
+            if b3.button("Analyser mon CV avec l'IA", icon=ICON["auto"], type="primary", use_container_width=True):
                 trouvees = backend.extraire_competences(st.session_state.cv_text)
                 nouvelles = [c for c in trouvees if c.lower() not in [s.lower() for s in profil["skills"]]]
                 for c in nouvelles:
@@ -605,8 +628,8 @@ elif tab == T_CV:
                     for col, s in zip(st.columns(len(sugg)), sugg):
                         col.button(f"+ {s}", key=f"sg_{s}", on_click=ajouter_skill, args=(s,), use_container_width=True)
             with st.container(border=True):
-                st.markdown(f"**🎯 Objectif de Stage :**\n\n{profil['objectif']}")
-                st.button("✈️ Passer à l'envoi d'emails", type="primary", use_container_width=True, on_click=goto, args=(T_EMAIL,), key="cv_to_mail")
+                st.markdown(f"**Objectif de Stage :**\n\n{profil['objectif']}")
+                st.button("Passer à l'envoi d'emails", icon=ICON["send"], type="primary", use_container_width=True, on_click=goto, args=(T_EMAIL,), key="cv_to_mail")
     with t2:
         with st.container(border=True):
             up = st.file_uploader("Importer ma lettre de motivation (PDF)", type=["pdf"], key="up_lm")
@@ -636,14 +659,14 @@ elif tab == T_CV:
 # ==========================================
 elif tab == T_ANALYSE:
     fournisseur_ia = "Gemini" if backend.GEMINI_API_KEY else "OmniRoute"
-    hero("analyse", f"✨ Analyseur Prédictif IA • {fournisseur_ia}", "Matching IA : CV vs Offre & Entreprise à Marrakech",
+    hero("analyse", f"{svg_icon('chart')} Analyseur Prédictif IA • {fournisseur_ia}", "Matching IA : CV vs Offre & Entreprise à Marrakech",
          "L'intelligence artificielle analyse votre CV et vos compétences au regard des exigences du recruteur, détecte les "
          "compétences clés manquantes et formule des recommandations adaptées au marché tech de Marrakech.")
     st.session_state.setdefault("an_mode", M_OFFRE)
     with st.container(border=True):
         a, b = st.columns([3, 1])
         mode = a.radio("Mode", [M_OFFRE, M_ENT], horizontal=True, label_visibility="collapsed", key="an_mode")
-        lancer = b.button("✨ Lancer l'Analyse du CV", type="primary", use_container_width=True, key="an_go")
+        lancer = b.button("Lancer l'Analyse du CV", icon=ICON["auto"], type="primary", use_container_width=True, key="an_go")
         x, y = st.columns([2, 1])
         if mode == M_OFFRE:
             if OFFRES.empty:
@@ -674,7 +697,7 @@ elif tab == T_ANALYSE:
         afficher_message("Analyse IA non effectuée : " + st.session_state.an_err, "error")
     res = st.session_state.get("an_res")
     if not res or res[0] != cible["titre"]:
-        st.markdown('<div class="kpi empty"><div style="font-size:34px">🗂️</div><h4>Prêt pour l\'analyse</h4>'
+        st.markdown(f'<div class="kpi empty"><div style="font-size:34px">{svg_icon("folder", 34)}</div><h4>Prêt pour l\'analyse</h4>'
                     'Cliquez sur « Lancer l\'Analyse du CV » pour comparer vos compétences avec l\'offre ou l\'entreprise sélectionnée.</div>',
                     unsafe_allow_html=True)
     else:
@@ -687,15 +710,15 @@ elif tab == T_ANALYSE:
                         unsafe_allow_html=True)
         with c2, st.container(border=True):
             st.markdown(f"**Synthèse** {'(rédigée par OmniRoute)' if r['ia'] else ''}\n\n{r['resume']}")
-            st.markdown("**✅ Compétences en commun**")
+            st.markdown("**Compétences en commun**")
             st.markdown(tags(", ".join(r["communes"]), "ok") or "_Aucune_", unsafe_allow_html=True)
-            st.markdown("**📚 Compétences à acquérir**")
+            st.markdown("**Compétences à acquérir**")
             st.markdown(tags(", ".join(r["manquantes"]), "no") or "_Aucune_", unsafe_allow_html=True)
         with st.container(border=True):
-            st.markdown("**💡 Recommandations**")
+            st.markdown(f"**{svg_icon('idea')} Recommandations**", unsafe_allow_html=True)
             for rec in r["recommandations"]:
                 st.markdown(f"• {rec}")
-            st.button("✈️ Rédiger l'email de candidature", type="primary", on_click=goto, args=(T_EMAIL,),
+            st.button("Rédiger l'email de candidature", icon=ICON["send"], type="primary", on_click=goto, args=(T_EMAIL,),
                       kwargs=({"em_mode": E_OFFRE, "em_offre": st.session_state.get("an_offre")} if mode == M_OFFRE
                               else {"em_mode": E_SPONT, "em_ent": st.session_state.get("an_ent")}), key="an_to_mail")
 
@@ -703,7 +726,7 @@ elif tab == T_ANALYSE:
 # 5. EMAIL & CANDIDATURE
 # ==========================================
 elif tab == T_EMAIL:
-    hero("email", "✉️ Générateur d'Emails de Candidature • Marrakech IT", "Email de Candidature Personnalisé par l'IA",
+    hero("email", f"{svg_icon('mail')} Générateur d'Emails de Candidature • Marrakech IT", "Email de Candidature Personnalisé par l'IA",
          "Générez un email ultra-ciblé mentionnant la référence de l'offre (LinkedIn, Indeed, Stagiaire.ma) ou une candidature "
          "spontanée mettant en valeur vos compétences (Python, SQL, Power BI) pour les entreprises de Marrakech.")
     st.session_state.setdefault("em_mode", E_OFFRE)
@@ -732,7 +755,7 @@ elif tab == T_EMAIL:
                        desc=en["description"], spont=True, type="Candidature spontanée", ok=email_public,
                        source=en.get("site_web", ""))
         y.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        if y.button("✨ Générer mon Email Personnalisé", type="primary", use_container_width=True):
+        if y.button("Générer mon Email Personnalisé", icon=ICON["auto"], type="primary", use_container_width=True):
             for k in ("em_suj", "em_corps", "em_dest", "em_cible"):
                 st.session_state.pop(k, None)
             st.session_state.pop("em_ia_err", None)
@@ -748,7 +771,7 @@ elif tab == T_EMAIL:
         afficher_message("E-mail non généré : " + st.session_state.em_generation_error, "error")
     etat_gm, msg_gm = backend.gmail_statut()
     afficher_message(msg_gm, "success" if etat_gm == "pret" else "warning" if etat_gm == "credentials_manquant" else "info")
-    if etat_gm == "a_autoriser" and st.button("🔐 Connecter Gmail", key="connect_gmail"):
+    if etat_gm == "a_autoriser" and st.button("Connecter Gmail", icon=ICON["lock"], key="connect_gmail"):
         try:
             backend.autoriser_gmail()
             afficher_message("Gmail autorisé sur cet ordinateur. Pour Streamlit Cloud, copiez le contenu de token.json dans ses Secrets sous GMAIL_TOKEN_JSON.", "success")
@@ -756,7 +779,7 @@ elif tab == T_EMAIL:
         except Exception as exc:
             afficher_message(f"Connexion Gmail non terminée : {str(exc)[:180]}", "error")
     if "em_corps" not in st.session_state:
-        st.markdown('<div class="kpi empty"><div style="font-size:34px">✉️</div><h4>Prêt à rédiger votre email de candidature</h4>'
+        st.markdown(f'<div class="kpi empty"><div style="font-size:34px">{svg_icon("mail", 34)}</div><h4>Prêt à rédiger votre email de candidature</h4>'
                     'Cliquez sur « Générer mon Email Personnalisé » pour concevoir un email sur-mesure adapté aux besoins de l\'entreprise.</div>',
                     unsafe_allow_html=True)
     else:
@@ -771,14 +794,14 @@ elif tab == T_EMAIL:
                 afficher_message("Adresse publique trouvée sur le site de l'entreprise. Vérifiez qu'elle convient aux candidatures.", "info")
             st.text_input("Destinataire", key="em_dest")
             if str(c.get("source", "")).startswith("http"):
-                st.link_button("🔗 Ouvrir l'annonce ou le site source", c["source"])
+                st.link_button("Ouvrir l'annonce ou le site source", c["source"], icon=ICON["link"])
             st.text_input("Sujet", key="em_suj")
             st.text_area("Message (modifiable)", key="em_corps", height=280)
             pj = pieces_jointes()
-            st.caption("📎 Pièces jointes : " + (", ".join(pj) if pj else "aucune (importez votre CV et votre lettre dans « Mon CV & Lettre »)"))
+            st.caption("Pièces jointes : " + (", ".join(pj) if pj else "aucune (importez votre CV et votre lettre dans « Mon CV & Lettre »)"))
             s1, s2 = st.columns(2)
             adresse_valide = backend.adresse_email_valide(st.session_state.get("em_dest", ""))
-            if s1.button("📨 Envoyer l'e-mail (API Gmail)", type="primary", use_container_width=True,
+            if s1.button("Envoyer l'e-mail (API Gmail)", icon=ICON["inbox"], type="primary", use_container_width=True,
                          disabled=not adresse_valide):
                 with st.spinner("Envoi par l'API Gmail… (la première fois, une page Google s'ouvre pour l'autorisation)"):
                     ok, msg = backend.envoyer_email_candidature(st.session_state.em_dest, st.session_state.em_suj,
@@ -788,22 +811,22 @@ elif tab == T_EMAIL:
                     afficher_message(msg + " Ajouté au suivi.", "success")
                 else:
                     afficher_message(msg, "error")
-            if s2.button("💾 Enregistrer sans envoyer (relance à faire)", use_container_width=True):
+            if s2.button("Enregistrer sans envoyer (relance à faire)", icon=ICON["save"], use_container_width=True):
                 backend.ajouter_suivi(c["nom"], c["poste"], c["type"], st.session_state.em_dest, "Relance à faire", "Brouillon")
                 afficher_message("Ajouté au suivi.", "success")
-            st.download_button("⬇️ Télécharger le mail avec pièces jointes (.eml)",
+            st.download_button("Télécharger le mail avec pièces jointes (.eml)",
                                backend.construire_eml(st.session_state.em_dest, st.session_state.em_suj, st.session_state.em_corps,
                                                       profil["email"], pieces_jointes()),
-                               file_name="candidature.eml", mime="message/rfc822")
+                               file_name="candidature.eml", mime="message/rfc822", icon=ICON["download"])
 
 # ==========================================
 # 6. SUIVI
 # ==========================================
 elif tab == T_SUIVI:
-    hero("suivi", "📊 Analytics & Suivi des Démarches • Stages Marrakech", "Tableau de Bord & Métriques des Candidatures",
+    hero("suivi", f"{svg_icon('chart')} Analytics & Suivi des Démarches • Stages Marrakech", "Tableau de Bord & Métriques des Candidatures",
          "Visualisez les statistiques en temps réel de votre campagne de recherche de stage à Marrakech : taux de réponse, "
          "entonnoir de conversion et répartition par type de candidature.",
-         action=("✈️ Nouvelle Candidature", goto, (T_EMAIL,)))
+         action=("Nouvelle Candidature", goto, (T_EMAIL,)))
     S = backend.charger_suivi()
     n = len(S)
     cnt = {s: int((S["statut"] == s).sum()) for s in backend.STATUTS}
@@ -850,7 +873,7 @@ elif tab == T_SUIVI:
     with st.container(border=True):
         f1, f2 = st.columns([3, 1])
         choix = f1.radio("Filtre", [f"Tous ({n})"] + [f"{s} ({cnt[s]})" for s in backend.STATUTS], horizontal=True, label_visibility="collapsed")
-        rech = f2.text_input("Rechercher", placeholder="🔍 Rechercher une entreprise...", label_visibility="collapsed")
+        rech = f2.text_input("Rechercher", placeholder="Rechercher une entreprise...", label_visibility="collapsed")
     V = S.copy()
     if not choix.startswith("Tous"):
         V = V[V["statut"] == choix.rsplit(" (", 1)[0]]
@@ -863,7 +886,7 @@ elif tab == T_SUIVI:
             a, b, c1, c2 = st.columns([5, 1.6, 0.4, 0.4])
             coul = COULEURS_STATUT.get(r["statut"], "#78716c")
             a.markdown(f'<span class="b" style="background:{coul}">{e(r["statut"])}</span> <span class="tag">{e(r["type"])}</span> '
-                       f'<span style="color:#78716c;font-size:13px">📅 {fr_date(r["date"])}</span>'
+                       f'<span style="color:#78716c;font-size:13px">{svg_icon("calendar", 15)} {fr_date(r["date"])}</span>'
                        f'<div style="font-weight:700;font-size:16px;margin:6px 0 2px">{e(r["titre"])}</div>'
                        f'<div style="font-size:13px;color:#57534e"><b>{e(r["nom"])}</b> &nbsp; <span class="tag">{e(r["email"])}</span></div>',
                        unsafe_allow_html=True)
@@ -872,8 +895,8 @@ elif tab == T_SUIVI:
             if nouveau != r["statut"]:
                 backend.changer_statut_suivi(r["id"], nouveau)
                 st.rerun()
-            if c1.button("👁", key=f"v_{r['id']}", help="Voir"):
+            if c1.button(" ", icon=ICON["visibility"], key=f"v_{r['id']}", help="Voir"):
                 dialogue_suivi(r.to_dict())
-            if c2.button("🗑", key=f"x_{r['id']}", help="Supprimer"):
+            if c2.button(" ", icon=ICON["delete"], key=f"x_{r['id']}", help="Supprimer"):
                 backend.supprimer_suivi(r["id"])
                 st.rerun()
