@@ -33,8 +33,12 @@ def svg_icon(name, size=18):
         "chart": '<path d="M4 19V5m0 14h17M8 15l3-4 3 2 5-7"/>',
         "search": '<circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/>',
         "folder": '<path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+        "person": '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+        "mail": '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+        "refresh": '<path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9A7 7 0 0 1 18 6l2 2M4 16l2 2a7 7 0 0 0 12.4-3"/>',
     }
-    return f'<svg aria-hidden="true" width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.2em">{paths[name]}</svg>'
+    path = paths.get(name, '<circle cx="12" cy="12" r="9"/><path d="M12 8v8m-4-4h8"/>')
+    return f'<svg aria-hidden="true" width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.2em">{path}</svg>'
 
 CV_PATH, LETTRE_PATH = "mon_cv.pdf", "ma_lettre_motivation.pdf"
 T_OFFRES, T_CARTE, T_CV, T_ANALYSE, T_EMAIL, T_SUIVI = (
