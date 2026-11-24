@@ -400,12 +400,15 @@ st.markdown('<div style="display:flex;gap:12px;align-items:center;margin-bottom:
             '<div class="brand">Marrakech<span>Stage</span> <span class="b-type" style="font-size:10px;padding:2px 8px">IT & IA</span></div>'
             '<div style="font-size:13px;color:#78736d">Hub Stages & Entreprises IT à Marrakech</div></div></div>', unsafe_allow_html=True)
 
-NAV = [(T_OFFRES, f"💼 Offres de Stage · {len(OFFRES)}"), (T_CARTE, f"📍 Carte & Entreprises IT · {len(ENTS)}"),
-       (T_CV, "👤 Mon CV & Lettre"), (T_ANALYSE, "✨ Analyseur IA"), (T_EMAIL, "✈️ Email & Candidature"),
-       (T_SUIVI, "✅ Suivi Candidatures")]
+NAV = [(T_OFFRES, f"Offres de Stage · {len(OFFRES)}", ":material/work:"),
+       (T_CARTE, f"Carte & Entreprises IT · {len(ENTS)}", ":material/location_on:"),
+       (T_CV, "Mon CV & Lettre", ":material/person:"),
+       (T_ANALYSE, "Analyseur IA", ":material/auto_awesome:"),
+       (T_EMAIL, "Email & Candidature", ":material/send:"),
+       (T_SUIVI, "Suivi Candidatures", ":material/check_circle:")]
 with st.container(key="nav"):
-    for col, (nom, label) in zip(st.columns(len(NAV)), NAV):
-        col.button(label, key=f"nav_{nom}", use_container_width=True, on_click=goto, args=(nom,),
+    for col, (nom, label, icon) in zip(st.columns(len(NAV)), NAV):
+        col.button(label, key=f"nav_{nom}", icon=icon, use_container_width=True, on_click=goto, args=(nom,),
                    type="primary" if st.session_state.tab == nom else "secondary")
 tab = st.session_state.tab
 
