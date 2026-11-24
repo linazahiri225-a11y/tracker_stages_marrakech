@@ -463,7 +463,6 @@ if tab == T_OFFRES:
         quartier = f2.selectbox("Quartier à Marrakech", ["Tous les quartiers"] + backend.QUARTIERS)
         type_stage = f3.selectbox("Type de stage", ["Tous les types"] + sorted(t for t in OFFRES["type_stage"].unique() if t))
 
-    st.caption("Recherche élargie : Data Analyst, Data Science, Power BI/BI, IA/ML, développement logiciel/web, cybersécurité, réseaux, cloud et autres stages IT. Les offres non techniques sont écartées même si leur description cite l'IA.")
 
     df = OFFRES.copy()
     if source != "Toutes":
